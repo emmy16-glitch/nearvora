@@ -1,0 +1,159 @@
+@import "tailwindcss";
+
+:root {
+  --nv-bg: #07080a;
+  --nv-bg-soft: #0a0c0f;
+  --nv-surface: #0e1115;
+  --nv-surface-2: #13171c;
+  --nv-surface-3: #191e24;
+  --nv-line: #232930;
+  --nv-line-strong: #313941;
+  --nv-fg: #f3f5f7;
+  --nv-muted: #8b95a1;
+  --nv-muted-2: #6b7480;
+  --nv-accent: #c8f561;
+  --nv-accent-soft: #d9fa8f;
+  --nv-accent-ink: #131a05;
+  --nv-teal: #5eead4;
+  --nv-danger: #ff7a85;
+  --nv-warning: #f5c76a;
+  --nv-success: #7ee2a8;
+}
+
+@theme inline {
+  --color-bg: var(--nv-bg);
+  --color-bg-soft: var(--nv-bg-soft);
+  --color-surface: var(--nv-surface);
+  --color-surface-2: var(--nv-surface-2);
+  --color-surface-3: var(--nv-surface-3);
+  --color-line: var(--nv-line);
+  --color-line-strong: var(--nv-line-strong);
+  --color-fg: var(--nv-fg);
+  --color-muted: var(--nv-muted);
+  --color-muted-2: var(--nv-muted-2);
+  --color-accent: var(--nv-accent);
+  --color-accent-soft: var(--nv-accent-soft);
+  --color-accent-ink: var(--nv-accent-ink);
+  --color-teal: var(--nv-teal);
+  --color-danger: var(--nv-danger);
+  --color-warning: var(--nv-warning);
+  --color-success: var(--nv-success);
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
+}
+
+* {
+  border-color: var(--nv-line);
+}
+
+html {
+  color-scheme: dark;
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--nv-bg);
+  color: var(--nv-fg);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: var(--nv-accent);
+  color: var(--nv-accent-ink);
+}
+
+:focus-visible {
+  outline: 2px solid var(--nv-accent);
+  outline-offset: 2px;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #262d35;
+  border-radius: 999px;
+  border: 2px solid var(--nv-bg);
+}
+
+@utility nv-container {
+  width: 100%;
+  max-width: 1240px;
+  margin-inline: auto;
+  padding-inline: 1rem;
+  @media (min-width: 640px) {
+    padding-inline: 1.5rem;
+  }
+  @media (min-width: 1024px) {
+    padding-inline: 2rem;
+  }
+}
+
+@utility nv-grid-bg {
+  background-image: linear-gradient(
+      to right,
+      color-mix(in srgb, var(--nv-line) 45%, transparent) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--nv-line) 45%, transparent) 1px,
+      transparent 1px
+    );
+  background-size: 48px 48px;
+}
+
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@keyframes nv-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes nv-pulse-soft {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.animate-fade-up {
+  animation: nv-fade-up 0.35s ease both;
+}
+
+.animate-pulse-soft {
+  animation: nv-pulse-soft 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -1,0 +1,384 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum KycStatus {
+  UNVERIFIED
+  PENDING
+  VERIFIED
+}
+
+enum AssetSymbol {
+  NGN
+  USDT
+  USDC
+  BTC
+  ETH
+}
+
+enum BeneficiaryType {
+  BANK
+  CRYPTO
+}
+
+enum BeneficiaryRisk {
+  TRUSTED
+  NEW
+}
+
+enum TransactionType {
+  DEPOSIT
+  WITHDRAWAL
+  TRANSFER
+  SWAP
+  BILL_PAYMENT
+  AIRTIME
+  DATA
+  CRYPTO_RECEIVE
+  CRYPTO_SEND
+}
+
+enum TransactionStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum TransactionDirection {
+  IN
+  OUT
+  NEUTRAL
+}
+
+enum PlanStatus {
+  DRAFT
+  VALIDATING
+  AWAITING_APPROVAL
+  APPROVED
+  EXECUTING
+  PARTIALLY_COMPLETED
+  COMPLETED
+  FAILED
+  CANCELLED
+  EXPIRED
+}
+
+enum PlanSource {
+  MANUAL
+  AI
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum ApprovalDecision {
+  APPROVED
+  REJECTED
+}
+
+enum ChatRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+enum BillCategory {
+  ELECTRICITY
+  AIRTIME
+  DATA
+}
+
+enum NotificationKind {
+  TRANSACTION
+  SECURITY
+  SYSTEM
+}
+
+model User {
+  id        String    @id
+  name      String
+  email     String    @unique
+  phone     String
+  kycStatus KycStatus @default(UNVERIFIED)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  wallets            WalletAsset[]
+  beneficiaries      Beneficiary[]
+  transactions       Transaction[]
+  quotes             Quote[]
+  plans              TransactionPlan[]
+  approvals          Approval[]
+  conversations      Conversation[]
+  messages           ChatMessage[]
+  bills              Bill[]
+  notifications      Notification[]
+  auditLogs          AuditLog[]
+  idempotencyRecords IdempotencyRecord[]
+
+  @@map("users")
+}
+
+model WalletAsset {
+  id        String      @id
+  userId    String
+  symbol    AssetSymbol
+  available String      @db.VarChar(40)
+  pending   String      @default("0") @db.VarChar(40)
+  address   String
+  network   String
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, symbol])
+  @@index([userId])
+  @@map("wallet_assets")
+}
+
+model Beneficiary {
+  id            String          @id
+  userId        String
+  type          BeneficiaryType
+  name          String
+  nickname      String?
+  bankName      String?
+  accountNumber String?
+  address       String?
+  network       String?
+  risk          BeneficiaryRisk @default(NEW)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type])
+  @@map("beneficiaries")
+}
+
+model Transaction {
+  id           String               @id
+  userId       String
+  reference    String               @unique
+  planId       String?
+  type         TransactionType
+  status       TransactionStatus    @default(PENDING)
+  direction    TransactionDirection
+  title        String
+  description  String
+  asset        AssetSymbol
+  amount       String               @db.VarChar(40)
+  fee          String               @default("0") @db.VarChar(40)
+  counterparty String?
+  note         String?
+  simulated    Boolean              @default(true)
+  createdAt    DateTime             @default(now())
+  completedAt  DateTime?
+
+  user User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan TransactionPlan? @relation(fields: [planId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([planId])
+  @@index([status])
+  @@map("transactions")
+}
+
+model Quote {
+  id          String      @id
+  userId      String
+  from        AssetSymbol
+  to          AssetSymbol
+  fromAmount  String      @db.VarChar(40)
+  toAmount    String      @db.VarChar(40)
+  rate        String
+  fee         String      @db.VarChar(40)
+  feeAsset    AssetSymbol
+  spreadBps   Int
+  slippageBps Int
+  simulated   Boolean     @default(true)
+  expiresAt   DateTime
+  createdAt   DateTime    @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([expiresAt])
+  @@map("quotes")
+}
+
+model TransactionPlan {
+  id                     String     @id
+  userId                 String
+  conversationId         String?
+  status                 PlanStatus @default(DRAFT)
+  title                  String
+  summary                String     @db.Text
+  operations             Json
+  warnings               Json
+  totalNgn               String     @db.VarChar(40)
+  remainingNgn           String     @db.VarChar(40)
+  riskLevel              RiskLevel  @default(LOW)
+  requiresAcknowledgment Boolean    @default(false)
+  simulated              Boolean    @default(true)
+  source                 PlanSource @default(MANUAL)
+  failureReason          String?
+  executionGuard         Json?
+  createdAt              DateTime   @default(now())
+  updatedAt              DateTime   @updatedAt
+  expiresAt              DateTime
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  approvals    Approval[]
+  transactions Transaction[]
+  messages     ChatMessage[]
+
+  @@index([userId, createdAt])
+  @@index([conversationId])
+  @@index([status])
+  @@map("transaction_plans")
+}
+
+model Approval {
+  id           String           @id
+  planId       String
+  userId       String
+  decision     ApprovalDecision
+  riskLevel    RiskLevel
+  acknowledged Boolean          @default(false)
+  note         String?
+  createdAt    DateTime         @default(now())
+
+  plan TransactionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  user User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, decision])
+  @@index([userId, createdAt])
+  @@map("approvals")
+}
+
+model Conversation {
+  id        String   @id
+  userId    String
+  title     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user     User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages ChatMessage[]
+  plans    TransactionPlan[]
+
+  @@index([userId, updatedAt])
+  @@map("conversations")
+}
+
+model ChatMessage {
+  id             String   @id
+  conversationId String
+  planId         String?
+  role           ChatRole
+  content        String   @db.Text
+  meta           Json?
+  createdAt      DateTime @default(now())
+
+  conversation Conversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  plan         TransactionPlan? @relation(fields: [planId], references: [id], onDelete: SetNull)
+  user         User?            @relation(fields: [userId], references: [id])
+  userId       String?
+
+  @@index([conversationId, createdAt])
+  @@index([planId])
+  @@map("chat_messages")
+}
+
+model Bill {
+  id               String       @id
+  userId           String
+  category         BillCategory
+  provider         String
+  accountReference String
+  nickname         String
+  outstanding      String?      @db.VarChar(40)
+  currency         String       @default("NGN") @db.VarChar(3)
+  demo             Boolean      @default(true)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, category])
+  @@map("bills")
+}
+
+model Notification {
+  id        String           @id
+  userId    String
+  title     String
+  body      String
+  kind      NotificationKind
+  read      Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read, createdAt])
+  @@map("notifications")
+}
+
+model AuditLog {
+  id        String   @id
+  userId    String
+  action    String
+  entity    String
+  entityId  String
+  metadata  Json
+  ip        String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([action])
+  @@map("audit_logs")
+}
+
+model IdempotencyRecord {
+  id        String   @id
+  key       String
+  userId    String
+  scope     String
+  result    Json
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, scope, key])
+  @@index([createdAt])
+  @@map("idempotency_records")
+}
+
+model WebhookEvent {
+  id          String    @id
+  provider    String
+  eventId     String
+  payload     Json
+  verified    Boolean   @default(false)
+  processedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@unique([provider, eventId])
+  @@index([provider, createdAt])
+  @@map("webhook_events")
+}
