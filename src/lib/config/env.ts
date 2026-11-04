@@ -26,10 +26,25 @@ export const env = {
     return process.env.DATA_MODE === "database" ? "database" : "demo";
   },
   get ai() {
+    const apiKey = process.env.NEAR_AI_KEY ?? process.env.AI_API_KEY ?? "";
+    const baseUrl = (
+      process.env.NEAR_AI_BASE_URL ??
+      process.env.AI_BASE_URL ??
+      "https://cloud-api.near.ai/v1"
+    ).replace(/\/+$/, "");
+    const model = process.env.NEAR_AI_MODEL ?? process.env.AI_MODEL ?? "";
     return {
-      apiKey: process.env.AI_API_KEY ?? process.env.OPENAI_API_KEY ?? "",
-      baseUrl: process.env.AI_BASE_URL ?? "https://api.openai.com/v1",
-      model: process.env.AI_MODEL ?? "gpt-4o-mini",
+      apiKey,
+      baseUrl,
+      model,
+      configured: Boolean(apiKey && model),
+      timeoutMs: positiveInt(process.env.NEAR_AI_TIMEOUT_MS, 30_000),
+      maxOutputTokens: positiveInt(process.env.NEAR_AI_MAX_OUTPUT_TOKENS, 1_200),
+      maxSteps: positiveInt(process.env.NEAR_AI_MAX_STEPS, 4),
+      dailyRequestLimit: positiveInt(process.env.NEAR_AI_DAILY_REQUEST_LIMIT, 60),
+      dailyTokenLimit: positiveInt(process.env.NEAR_AI_DAILY_TOKEN_LIMIT, 60_000),
+      inputCostPerMillion: optionalNumber(process.env.NEAR_AI_INPUT_COST_PER_MILLION),
+      outputCostPerMillion: optionalNumber(process.env.NEAR_AI_OUTPUT_COST_PER_MILLION),
     };
   },
   get near() {
@@ -55,6 +70,17 @@ export const env = {
     };
   },
 } as const;
+
+function positiveInt(value: string | undefined, fallback: number): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
+}
+
+function optionalNumber(value: string | undefined): number | null {
+  if (value === undefined || value.trim() === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+}
 
 export const DEMO_MODE = process.env.DEMO_MODE !== "false";
 export const DATA_MODE = process.env.DATA_MODE === "database" ? "database" : "demo";

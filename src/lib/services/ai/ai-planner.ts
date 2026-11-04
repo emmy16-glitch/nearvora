@@ -1,87 +1,26 @@
-import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import { generateObject } from "ai";
 import { z } from "zod";
-import { env } from "@/lib/config/env";
+import { ASSET_SYMBOLS } from "@/lib/config/assets";
+import { getAiProvider } from "@/lib/ai/provider";
+import { NEARVORA_AI_INTENT_PROMPT } from "@/lib/ai/system-prompt";
+import { assertUsageAllowed, recordUsage } from "@/lib/ai/usage";
+import { normalizeAiError } from "@/lib/ai/errors";
 import type { ChatMessage } from "@/lib/types/domain";
+import { intentSchema } from "@/lib/ai/schemas";
 import type { AssistantIntent, PlannerContext } from "./types";
 
-export class AiProviderError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "AiProviderError";
-  }
-}
-
-const operationSchema = z.object({
-  kind: z.enum([
-    "bank_transfer",
-    "crypto_transfer",
-    "swap",
-    "bill_payment",
-    "cash_deposit",
-    "cash_withdrawal",
-  ]),
-  amount: z
-    .string()
-    .nullable()
-    .optional()
-    .describe("Decimal amount in the source asset, e.g. '200000' or '150.5'. Null if absent."),
-  asset: z.string().nullable().optional(),
-  fromAsset: z.string().nullable().optional(),
-  toAsset: z.string().nullable().optional(),
-  beneficiaryHint: z
-    .string()
-    .nullable()
-    .optional()
-    .describe("Name or nickname of a saved beneficiary mentioned by the user."),
-  recipientName: z.string().nullable().optional(),
-  bankName: z.string().nullable().optional(),
-  accountNumber: z.string().nullable().optional(),
-  address: z
-    .string()
-    .nullable()
-    .optional()
-    .describe("Crypto address explicitly provided by the user. Never invent one."),
-  network: z.string().nullable().optional(),
-  billerHint: z
-    .string()
-    .nullable()
-    .optional()
-    .describe("Saved biller or bill nickname mentioned by the user."),
-  billId: z.string().nullable().optional(),
-  note: z.string().nullable().optional(),
-});
-
-const intentSchema = z.object({
-  summary: z.string().describe("One short sentence describing the user's intent."),
-  operations: z.array(operationSchema).max(8),
-  missingInformation: z
-    .array(z.string())
-    .describe("Specific missing details. Never guess recipient or payment details."),
-  assumptions: z.array(z.string()),
-});
-
-export function isAiConfigured(): boolean {
-  return Boolean(env.ai.apiKey);
-}
+export { isAiConfigured } from "@/lib/ai/model-config";
+export { AiError as AiProviderError } from "@/lib/ai/errors";
 
 export async function extractIntentWithModel(
   message: string,
   context: PlannerContext,
   history: ChatMessage[],
+  userId = "anonymous",
 ): Promise<AssistantIntent> {
-  if (!isAiConfigured()) {
-    throw new AiProviderError("No AI provider API key is configured.");
-  }
-
-  const provider = createOpenAICompatible({
-    name: "nearvora",
-    baseURL: env.ai.baseUrl,
-    apiKey: env.ai.apiKey,
-  });
+  assertUsageAllowed(userId);
 
   const contextPayload = {
-    supportedAssets: ["NGN", "USDT", "USDC", "BTC", "ETH"],
+    supportedAssets: ASSET_SYMBOLS,
     balances: context.balances,
     nairaAvailableMinorUnits: context.nairaAvailable,
     savedBeneficiaries: context.beneficiaries.map((beneficiary) => ({
@@ -107,24 +46,23 @@ export async function extractIntentWithModel(
   };
 
   try {
-    const { object } = await generateObject({
-      model: provider(env.ai.model),
-      schema: intentSchema,
-      temperature: 0,
-      system: [
-        "You are the intent-extraction engine for Nearvora, a Naira and crypto finance app.",
-        "You never execute transactions and you never have wallet access.",
-        "Convert the user's request into structured operations.",
-        "Use only NGN, USDT, USDC, BTC and ETH.",
-        "Only reference beneficiaries and bills supplied in the context. Never invent names, account numbers, addresses, balances, rates or fees.",
-        "Amounts must be decimal strings in the SOURCE asset (NGN for transfers, bills, deposits and withdrawals).",
-        "If a required value is missing, add a specific question to missingInformation and omit that operation.",
-        "The user may state a starting balance; ignore it for calculations because the backend uses actual balances.",
-        "A request to leave the remaining balance is not an operation; record it as an assumption.",
-      ].join(" "),
-      prompt: `Context JSON:\n${JSON.stringify(contextPayload)}\n\nUser message:\n${message}`,
-    });
+    const result = await getAiProvider().generateObject<z.infer<typeof intentSchema>>(
+      intentSchema,
+      {
+        system: NEARVORA_AI_INTENT_PROMPT,
+        messages: [
+          {
+            role: "user",
+            content: `Context JSON:\n${JSON.stringify(contextPayload)}\n\nUser message:\n${message}`,
+          },
+        ],
+        temperature: 0,
+      },
+    );
 
+    recordUsage(userId, result.usage);
+
+    const object = result.object;
     return {
       summary: object.summary,
       operations: object.operations.map((operation) => ({
@@ -146,13 +84,8 @@ export async function extractIntentWithModel(
       missingInformation: object.missingInformation,
       assumptions: object.assumptions,
       planner: "model",
-      modelName: env.ai.model,
     };
   } catch (error) {
-    throw new AiProviderError(
-      error instanceof Error
-        ? `The configured model call failed: ${error.message}`
-        : "The configured model call failed.",
-    );
+    throw normalizeAiError(error);
   }
 }
