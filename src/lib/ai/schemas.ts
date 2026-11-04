@@ -12,32 +12,28 @@ export const intentOperationSchema = z.object({
   amount: z
     .string()
     .nullable()
-    .optional()
     .describe("Decimal amount in the source asset, e.g. '200000' or '150.5'. Null if absent."),
-  asset: z.string().nullable().optional(),
-  fromAsset: z.string().nullable().optional(),
-  toAsset: z.string().nullable().optional(),
+  asset: z.string().nullable(),
+  fromAsset: z.string().nullable(),
+  toAsset: z.string().nullable(),
   beneficiaryHint: z
     .string()
     .nullable()
-    .optional()
     .describe("Name or nickname of a saved beneficiary mentioned by the user."),
-  recipientName: z.string().nullable().optional(),
-  bankName: z.string().nullable().optional(),
-  accountNumber: z.string().nullable().optional(),
+  recipientName: z.string().nullable(),
+  bankName: z.string().nullable(),
+  accountNumber: z.string().nullable(),
   address: z
     .string()
     .nullable()
-    .optional()
     .describe("Crypto address explicitly provided by the user. Never invent one."),
-  network: z.string().nullable().optional(),
+  network: z.string().nullable(),
   billerHint: z
     .string()
     .nullable()
-    .optional()
     .describe("Saved biller or bill nickname mentioned by the user."),
-  billId: z.string().nullable().optional(),
-  note: z.string().nullable().optional(),
+  billId: z.string().nullable(),
+  note: z.string().nullable(),
 });
 
 export const intentSchema = z.object({

@@ -99,6 +99,11 @@ const demoLedger = new DemoLedgerAdapter();
 
 export function getLedgerAdapter(): LedgerAdapter {
   if (env.formance.url && env.formance.token) return new FormanceLedgerAdapter();
+  if (!env.demoMode) {
+    // Never write a simulated journal in LIVE mode. FormanceAdapter throws
+    // because the live API contract has not been verified.
+    return new FormanceLedgerAdapter();
+  }
   return demoLedger;
 }
 

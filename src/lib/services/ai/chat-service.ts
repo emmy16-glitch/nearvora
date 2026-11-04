@@ -1,4 +1,5 @@
 import { ApiError } from "@/lib/api/handler";
+import { env } from "@/lib/config/env";
 import { createId, getStore } from "@/lib/database/store";
 import { formatAmount } from "@/lib/money/format";
 import { audit } from "@/lib/security/audit";
@@ -7,7 +8,7 @@ import type { ChatMessage, Conversation, TransactionPlan, User } from "@/lib/typ
 import { createPlan } from "@/lib/services/transactions/plan-service";
 import { AiError } from "@/lib/ai/errors";
 import { isAiConfigured } from "@/lib/ai/model-config";
-import { extractIntentWithModel } from "./ai-planner";
+import { answerWithModel, extractIntentWithModel } from "./ai-planner";
 import { buildPlannerContext, resolveIntent } from "./intent-resolver";
 import { produceFallbackIntent } from "./fallback-planner";
 import type { AssistantIntent, ChatToolCall } from "./types";
@@ -69,10 +70,16 @@ export async function handleChat(input: {
       intent = await extractIntentWithModel(input.message, context, history, user.id);
     } catch (error) {
       if (!(error instanceof AiError)) throw error;
+      // In LIVE mode a provider failure must surface to the customer. Silently
+      // swapping in the deterministic planner would hide a broken integration.
+      if (!env.demoMode) throw error;
       modelNote = error.message;
       intent = produceFallbackIntent(input.message, context);
     }
   } else {
+    if (!env.demoMode) {
+      throw new AiError("AI_NOT_CONFIGURED");
+    }
     intent = produceFallbackIntent(input.message, context);
   }
 
@@ -113,12 +120,33 @@ export async function handleChat(input: {
   let plan: TransactionPlan | undefined;
   let assistantContent: string;
 
-  if (missing.length > 0 || !resolved.plan) {
+  if (missing.length > 0) {
     assistantContent = buildMissingInformationMessage(intent, missing, modelNote);
     toolCalls.push({
       name: "prepareTransactionPlan",
       status: "error",
       summary: "Plan not prepared because required information is missing.",
+    });
+  } else if (!resolved.plan) {
+    if (intent.planner === "model" && intent.operations.length === 0) {
+      try {
+        assistantContent = await answerWithModel(
+          input.message,
+          context,
+          history,
+          user.id,
+        );
+      } catch (error) {
+        if (!env.demoMode) throw error;
+        assistantContent = buildMissingInformationMessage(intent, missing, modelNote);
+      }
+    } else {
+      assistantContent = buildMissingInformationMessage(intent, missing, modelNote);
+    }
+    toolCalls.push({
+      name: "prepareTransactionPlan",
+      status: "error",
+      summary: "No transaction was prepared for this request.",
     });
   } else {
     try {
@@ -202,8 +230,8 @@ function buildMissingInformationMessage(
 ): string {
   const prefix =
     intent.planner === "fallback"
-      ? "No AI model is connected, so I used Nearvora's deterministic development planner. It only uses saved demo data and backend balances."
-      : "I used the configured AI model to understand your request.";
+      ? "Nearvora AI is not connected, so I used Nearvora's deterministic development planner. It only uses saved demo data and backend balances."
+      : "I used Nearvora AI to understand your request.";
   const note = modelNote ? `\n\n_${modelNote}_` : "";
   const questions =
     missing.length > 0
@@ -232,7 +260,7 @@ function buildPlanMessage(
   const plannerLine =
     intent.planner === "fallback"
       ? "I used Nearvora's deterministic development planner (no AI model is connected)."
-      : `I used ${intent.modelName ?? "the configured AI model"} to understand your request; all amounts, quotes and balances below come from Nearvora's backend.`;
+      : "I used Nearvora AI to understand your request; all amounts, quotes and balances below come from Nearvora's backend.";
   const note = modelNote ? `\n\n_${modelNote}_` : "";
   const steps = plan.operations
     .map((operation, index) => {

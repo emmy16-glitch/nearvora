@@ -1,6 +1,7 @@
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import { generateObject, generateText, stepCountIs, streamText } from "ai";
+import { generateText, Output, stepCountIs, streamText } from "ai";
 import type { z } from "zod";
+import { env } from "@/lib/config/env";
 import { logAiFailure, normalizeAiError } from "./errors";
 import { listAvailableModels, requireAiConfig, type AvailableModel } from "./model-config";
 import type {
@@ -67,8 +68,8 @@ function mapToolCalls(
   });
 }
 
-export class NearAiProvider implements AiProvider {
-  readonly id = "near-ai-cloud";
+export class OpenAiCompatibleProvider implements AiProvider {
+  readonly id = env.ai.provider;
 
   constructor() {
     // Configuration is validated lazily so the app can run in demo mode without
@@ -85,6 +86,9 @@ export class NearAiProvider implements AiProvider {
       name: "nearvora-ai",
       baseURL: config.baseUrl,
       apiKey: config.apiKey,
+      // Groq's GPT-OSS models support strict JSON schema output. NEAR AI
+      // models vary, so those continue to use broadly supported JSON mode.
+      supportsStructuredOutputs: config.provider === "groq",
     });
     return { model: provider(config.model), config };
   }
@@ -154,10 +158,9 @@ export class NearAiProvider implements AiProvider {
     const started = Date.now();
     try {
       const { model, config } = this.model();
-      const result = await generateObject<z.ZodTypeAny, "object", T>({
+      const result = await generateText({
         model,
-        schema,
-        output: "object",
+        output: Output.object({ schema }),
         system: request.system,
         messages: request.messages,
         temperature: request.temperature ?? 0,
@@ -166,7 +169,7 @@ export class NearAiProvider implements AiProvider {
         abortSignal: request.abortSignal ?? AbortSignal.timeout(config.timeoutMs),
       });
       return {
-        object: result.object as T,
+        object: result.output as T,
         usage: mapUsage(result.usage),
         finishReason: result.finishReason ?? null,
       };

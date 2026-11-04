@@ -1,25 +1,28 @@
 import { env } from "@/lib/config/env";
+import { isAiConfigured } from "@/lib/ai/model-config";
 import { getOutLayerAdapter } from "@/lib/services/outlayer";
 import { getNearIntentsAdapter } from "@/lib/services/intents";
 import { getPaymentProvider } from "@/lib/services/payments";
 
 export function systemStatus() {
-  const aiConfigured = Boolean(env.ai.apiKey);
+  const aiConfigured = isAiConfigured();
   const outlayer = getOutLayerAdapter();
   const intents = getNearIntentsAdapter();
   const payments = getPaymentProvider();
   return {
+    mode: env.mode,
     demoMode: env.demoMode,
-    dataMode: "demo" as const,
+    liveReady: false,
+    persistence: "in-memory" as const,
+    dataMode: env.dataMode,
     databaseConfigured: Boolean(env.databaseUrl),
     ai: {
+      assistant: "Nearvora AI",
       configured: aiConfigured,
-      provider: "openai-compatible",
-      model: aiConfigured ? env.ai.model : null,
       planner: aiConfigured ? "model" : "deterministic-development-planner",
       note: aiConfigured
-        ? "Model configured. Financial data and execution still come from the backend."
-        : "No AI model is connected. The labelled development planner is active.",
+        ? "Nearvora AI is connected. Financial data and execution still come from the Nearvora backend."
+        : "Nearvora AI is not connected. The labelled development planner is active.",
     },
     near: {
       network: env.near.network,
@@ -31,13 +34,17 @@ export function systemStatus() {
     payments: {
       provider: payments.name,
       mode: payments.mode,
-      note: "All Naira settlements are simulated unless approved live credentials are configured.",
+      note: "All Naira settlements are simulated unless approved live credentials are configured and live mode is enabled.",
     },
     accounting: {
       formanceConfigured: Boolean(env.formance.url && env.formance.token),
       note: "Formance adapter is scaffolded; the demo ledger is used until configured.",
     },
-    simulated: true,
+    liveRuntimeNote:
+      env.demoMode
+        ? null
+        : "LIVE mode is not available in this build. The in-memory demo store and provider adapters refuse to serve or execute data in LIVE mode.",
+    simulated: env.demoMode,
   };
 }
 

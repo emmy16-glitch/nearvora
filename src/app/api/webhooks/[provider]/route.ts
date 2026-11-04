@@ -17,6 +17,13 @@ export async function POST(
 ) {
   return handleRoute(async () => {
     const { provider } = await context.params;
+    if (!env.demoMode) {
+      return fail(
+        503,
+        "LIVE_WEBHOOKS_UNAVAILABLE",
+        "Live provider webhooks are not enabled. No event was processed and no balance was changed.",
+      );
+    }
     const secret = env.payments.webhookSecret;
     if (!secret) {
       return fail(

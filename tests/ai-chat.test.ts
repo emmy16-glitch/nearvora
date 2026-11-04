@@ -4,16 +4,22 @@ import { getStore } from "@/lib/database/store";
 import { handleChat } from "@/lib/services/ai/chat-service";
 
 const savedKeys = {
+  nearAi: process.env.NEAR_AI_KEY,
+  nearAiModel: process.env.NEAR_AI_MODEL,
   ai: process.env.AI_API_KEY,
   openai: process.env.OPENAI_API_KEY,
 };
 
 beforeAll(() => {
+  delete process.env.NEAR_AI_KEY;
+  delete process.env.NEAR_AI_MODEL;
   delete process.env.AI_API_KEY;
   delete process.env.OPENAI_API_KEY;
 });
 
 afterAll(() => {
+  if (savedKeys.nearAi) process.env.NEAR_AI_KEY = savedKeys.nearAi;
+  if (savedKeys.nearAiModel) process.env.NEAR_AI_MODEL = savedKeys.nearAiModel;
   if (savedKeys.ai) process.env.AI_API_KEY = savedKeys.ai;
   if (savedKeys.openai) process.env.OPENAI_API_KEY = savedKeys.openai;
 });

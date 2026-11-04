@@ -1,7 +1,8 @@
-import { env } from "@/lib/config/env";
+import { env, type AiProviderId } from "@/lib/config/env";
 import { AiError, AiNotConfiguredError, normalizeAiError } from "./errors";
 
 export interface AiModelConfig {
+  provider: AiProviderId;
   apiKey: string;
   baseUrl: string;
   model: string;
@@ -19,22 +20,35 @@ const MODEL_CACHE_MS = 5 * 60 * 1000;
 let modelCache: { expiresAt: number; models: AvailableModel[] } | null = null;
 
 export function isAiConfigured(): boolean {
-  return Boolean(env.ai.apiKey && env.ai.model);
+  if (!env.ai.apiKey || !env.ai.model) return false;
+  try {
+    const url = new URL(env.ai.baseUrl);
+    return url.protocol === "https:" || url.protocol === "http:";
+  } catch {
+    return false;
+  }
 }
 
 /** Validates the server-side configuration lazily, only when AI is actually used. */
 export function requireAiConfig(): AiModelConfig {
   if (!env.ai.apiKey) {
     throw new AiNotConfiguredError(
-      "NEAR_AI_KEY is not configured. Nearvora AI will use the labelled development planner.",
+      "Nearvora AI has no server-side provider credential. It will use the labelled development planner.",
     );
   }
   if (!env.ai.model) {
     throw new AiNotConfiguredError(
-      "NEAR_AI_MODEL is not configured. Nearvora AI will use the labelled development planner.",
+      "Nearvora AI has no model selected. It will use the labelled development planner.",
     );
   }
+  try {
+    const url = new URL(env.ai.baseUrl);
+    if (url.protocol !== "https:" && url.protocol !== "http:") throw new Error("bad protocol");
+  } catch (error) {
+    throw new AiError("AI_NOT_CONFIGURED", { cause: error });
+  }
   return {
+    provider: env.ai.provider,
     apiKey: env.ai.apiKey,
     baseUrl: env.ai.baseUrl,
     model: env.ai.model,
@@ -55,7 +69,10 @@ export async function listAvailableModels(): Promise<AvailableModel[]> {
   let response: Response;
   try {
     response = await fetch(`${config.baseUrl}/models`, {
-      headers: { Authorization: `Bearer ${config.apiKey}` },
+      headers: {
+        Authorization: `Bearer ${config.apiKey}`,
+        "User-Agent": "nearvora/0.1",
+      },
       signal: AbortSignal.timeout(Math.min(config.timeoutMs, 15_000)),
       cache: "no-store",
     });

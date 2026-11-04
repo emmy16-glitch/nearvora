@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { ASSET_SYMBOLS } from "@/lib/config/assets";
 import { getAiProvider } from "@/lib/ai/provider";
-import { NEARVORA_AI_INTENT_PROMPT } from "@/lib/ai/system-prompt";
+import { NEARVORA_AI_INTENT_PROMPT, NEARVORA_AI_SYSTEM_PROMPT } from "@/lib/ai/system-prompt";
 import { assertUsageAllowed, recordUsage } from "@/lib/ai/usage";
 import { normalizeAiError } from "@/lib/ai/errors";
 import type { ChatMessage } from "@/lib/types/domain";
@@ -11,15 +11,8 @@ import type { AssistantIntent, PlannerContext } from "./types";
 export { isAiConfigured } from "@/lib/ai/model-config";
 export { AiError as AiProviderError } from "@/lib/ai/errors";
 
-export async function extractIntentWithModel(
-  message: string,
-  context: PlannerContext,
-  history: ChatMessage[],
-  userId = "anonymous",
-): Promise<AssistantIntent> {
-  assertUsageAllowed(userId);
-
-  const contextPayload = {
+function buildContextPayload(context: PlannerContext, history: ChatMessage[]) {
+  return {
     supportedAssets: ASSET_SYMBOLS,
     balances: context.balances,
     nairaAvailableMinorUnits: context.nairaAvailable,
@@ -44,6 +37,17 @@ export async function extractIntentWithModel(
       content: item.content,
     })),
   };
+}
+
+export async function extractIntentWithModel(
+  message: string,
+  context: PlannerContext,
+  history: ChatMessage[],
+  userId = "anonymous",
+): Promise<AssistantIntent> {
+  assertUsageAllowed(userId);
+
+  const contextPayload = buildContextPayload(context, history);
 
   try {
     const result = await getAiProvider().generateObject<z.infer<typeof intentSchema>>(
@@ -84,7 +88,48 @@ export async function extractIntentWithModel(
       missingInformation: object.missingInformation,
       assumptions: object.assumptions,
       planner: "model",
+      modelName: "Nearvora AI",
     };
+  } catch (error) {
+    throw normalizeAiError(error);
+  }
+}
+
+/**
+ * Answers a general account question using the same backend context that the
+ * intent engine receives. The model never receives wallet keys and cannot
+ * execute anything; this path is text-only.
+ */
+export async function answerWithModel(
+  message: string,
+  context: PlannerContext,
+  history: ChatMessage[],
+  userId = "anonymous",
+): Promise<string> {
+  assertUsageAllowed(userId);
+
+  const contextPayload = buildContextPayload(context, history);
+  try {
+    const result = await getAiProvider().chat({
+      system: [
+        NEARVORA_AI_SYSTEM_PROMPT,
+        "For this request you are answering a question, not preparing a transaction.",
+        "Use only the supplied context for account facts. If a value is absent, say it is unavailable.",
+        "Do not claim that any transfer, swap, bill payment or withdrawal was executed.",
+      ].join(" "),
+      messages: [
+        {
+          role: "user",
+          content: `Context JSON:\n${JSON.stringify(contextPayload)}\n\nUser question:\n${message}`,
+        },
+      ],
+      temperature: 0.2,
+      maxOutputTokens: 600,
+    });
+    recordUsage(userId, result.usage);
+    const text = result.text.trim();
+    if (!text) throw new Error("empty model response");
+    return text;
   } catch (error) {
     throw normalizeAiError(error);
   }

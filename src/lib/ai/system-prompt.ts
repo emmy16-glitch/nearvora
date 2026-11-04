@@ -28,6 +28,7 @@ export const NEARVORA_AI_INTENT_PROMPT = [
   `Use only these supported assets: ${ASSET_SYMBOLS.join(", ")}.`,
   "Only reference beneficiaries and bills supplied in the context. Never invent names, account numbers, addresses, balances, rates or fees.",
   "Amounts must be decimal strings in the SOURCE asset (NGN for transfers, bills, deposits and withdrawals).",
+  "Always include every schema field in each operation. Use null for fields that are not relevant or not provided; never omit a field.",
   "If a required value is missing, add a specific question to missingInformation and omit that operation.",
   "The user may state a starting balance; ignore it for calculations because the backend uses actual balances.",
   "A request to leave the remaining balance is not an operation; record it as an assumption.",

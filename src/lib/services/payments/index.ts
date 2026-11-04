@@ -131,6 +131,9 @@ class UnconfiguredLiveProvider implements PaymentProviderAdapter {
 }
 
 export function getPaymentProvider(): PaymentProviderAdapter {
-  if (env.payments.provider === "demo" || env.demoMode) return new DemoPaymentProvider();
+  if (env.demoMode) return new DemoPaymentProvider();
+  // LIVE mode never returns the demo adapter, even if PAYMENT_PROVIDER=demo.
+  // There are no verified live adapters in this build, so all live operations
+  // fail closed rather than simulating a payment.
   return new UnconfiguredLiveProvider();
 }

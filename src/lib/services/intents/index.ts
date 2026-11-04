@@ -65,6 +65,31 @@ class DemoNearIntentsAdapter implements NearIntentsAdapter {
   }
 }
 
+class UnconfiguredLiveNearIntentsAdapter implements NearIntentsAdapter {
+  readonly name = "NEAR Intents (unconfigured live adapter)";
+  readonly mode = "live" as const;
+
+  getSupportedAssets(): IntentsAssetSupport[] {
+    return (Object.keys(ASSETS) as AssetSymbol[])
+      .filter((symbol) => symbol !== "NGN")
+      .map((symbol) => ({
+        symbol,
+        networks: ASSETS[symbol].networks.map((network) => network.name),
+        live: false,
+      }));
+  }
+
+  isConfigured(): boolean {
+    return false;
+  }
+
+  async getQuote(): Promise<IntentsQuote> {
+    throw new Error(
+      "NEAR Intents live quoting is not configured. Refusing to return a simulated quote in LIVE mode.",
+    );
+  }
+}
+
 export function getNearIntentsAdapter(): NearIntentsAdapter {
   if (env.near.intentsApiUrl) {
     // A live adapter is intentionally omitted until the official API contract
@@ -73,5 +98,6 @@ export function getNearIntentsAdapter(): NearIntentsAdapter {
       "[nearvora] NEAR_INTENTS_API_URL is set but no verified live adapter is implemented.",
     );
   }
+  if (!env.demoMode) return new UnconfiguredLiveNearIntentsAdapter();
   return new DemoNearIntentsAdapter();
 }

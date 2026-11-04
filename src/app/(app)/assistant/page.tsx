@@ -207,7 +207,7 @@ function AssistantClient() {
         <div className="flex items-center gap-2">
           <span className="size-1.5 rounded-full bg-success" aria-hidden />
           <span className="text-[10.5px] text-muted">
-            {system.ai.configured ? "Model connected" : "Deterministic development planner"}
+            {system.ai.configured ? "Nearvora AI connected" : "Deterministic development planner"}
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -470,7 +470,7 @@ function MessageBubble({
             <div className="mt-2.5 flex flex-wrap items-center gap-1.5 border-t border-line/70 pt-2">
               <Badge variant={message.meta.planner === "fallback" ? "warning" : "accent"}>
                 {message.meta.planner === "model"
-                  ? message.meta.modelName ?? "AI model"
+                  ? "Nearvora AI"
                   : message.meta.planner === "fallback"
                     ? "Dev planner"
                     : "System"}

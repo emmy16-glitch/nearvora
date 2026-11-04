@@ -1,4 +1,5 @@
 import Decimal from "decimal.js";
+import { env } from "@/lib/config/env";
 import { ASSETS, DEMO_NETWORK_FEES, getNetwork, type AssetSymbol } from "@/lib/config/assets";
 import { ApiError } from "@/lib/api/handler";
 import { createId, createReference, getStore } from "@/lib/database/store";
@@ -41,6 +42,13 @@ export function createPlan(
   input: CreatePlanInput,
   options: { conversationId?: string; source?: "manual" | "ai" } = {},
 ): TransactionPlan {
+  if (!env.demoMode) {
+    throw new ApiError(
+      503,
+      "LIVE_EXECUTION_DISABLED",
+      "Live execution is not configured. Nearvora will not create a simulated plan in LIVE mode.",
+    );
+  }
   const store = getStore();
   const source = options.source ?? input.source ?? "manual";
 
@@ -465,6 +473,13 @@ export function approveAndExecutePlan(
   planId: string,
   input: { acknowledged: boolean; idempotencyKey?: string; note?: string; ip?: string },
 ): { plan: TransactionPlan; transactions: Transaction[] } {
+  if (!env.demoMode) {
+    throw new ApiError(
+      503,
+      "LIVE_EXECUTION_DISABLED",
+      "Live execution is not configured. Nearvora will not execute a simulated plan in LIVE mode.",
+    );
+  }
   const store = getStore();
 
   if (input.idempotencyKey) {

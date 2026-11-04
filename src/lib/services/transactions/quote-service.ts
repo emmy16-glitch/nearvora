@@ -1,4 +1,5 @@
 import Decimal from "decimal.js";
+import { env } from "@/lib/config/env";
 import {
   ASSETS,
   DEMO_NGN_RATES,
@@ -35,6 +36,13 @@ export function referenceRate(from: AssetSymbol, to: AssetSymbol): Decimal {
  * changing callers.
  */
 export function createQuote(userId: string, request: QuoteRequest): Quote {
+  if (!env.demoMode) {
+    throw new ApiError(
+      503,
+      "LIVE_QUOTES_DISABLED",
+      "Live quotes are not configured. Nearvora will not present a simulated quote as live pricing.",
+    );
+  }
   const { from, to } = request;
   if (from === to) {
     throw new ApiError(422, "SAME_ASSET", "Choose two different assets to convert.");

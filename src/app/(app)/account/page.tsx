@@ -93,7 +93,7 @@ export default function AccountPage() {
     {
       icon: Bot,
       name: "AI assistant",
-      state: system.ai.configured ? "Model connected" : "Dev planner",
+      state: system.ai.configured ? "Nearvora AI connected" : "Dev planner",
       ok: system.ai.configured,
     },
     {

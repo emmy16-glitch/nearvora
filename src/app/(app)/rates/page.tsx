@@ -61,10 +61,10 @@ export default function RatesPage() {
               <div className="pointer-events-none absolute -right-10 -top-16 size-52 rounded-full bg-white/10 blur-3xl" aria-hidden />
               <div className="relative flex items-start justify-between gap-4">
                 <div>
-                  <p className="text-[15px] font-semibold">Live Exchange Rates</p>
+                  <p className="text-[15px] font-semibold">Demo Exchange Rates</p>
                   <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-white/70">
-                    <span className="size-1.5 rounded-full bg-[#86efac]" aria-hidden />
-                    Updated every 30 seconds
+                    <span className="size-1.5 rounded-full bg-[#fbbf24]" aria-hidden />
+                    Simulated reference feed · not live market data
                   </p>
                 </div>
                 <span className="grid size-11 place-items-center rounded-xl border border-white/15 bg-white/10">

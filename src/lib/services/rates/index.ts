@@ -1,3 +1,5 @@
+import { env } from "@/lib/config/env";
+import { ApiError } from "@/lib/api/handler";
 import {
   ASSETS,
   CRYPTO_SYMBOLS,
@@ -28,6 +30,13 @@ export interface RatesSnapshot {
  * live market data.
  */
 export function getRates(): RatesSnapshot {
+  if (!env.demoMode) {
+    throw new ApiError(
+      503,
+      "LIVE_RATES_DISABLED",
+      "No live market-rate provider is configured. Nearvora will not serve simulated rates as live market data.",
+    );
+  }
   const rates = CRYPTO_SYMBOLS.map((symbol) => ({
     symbol,
     name: ASSETS[symbol].name,

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { env } from "@/lib/config/env";
 import type { AssetSymbol } from "@/lib/config/assets";
 import type {
   Approval,
@@ -362,6 +363,11 @@ function subtract(a: string, b: string): string {
 const globalForStore = globalThis as unknown as { __nearvoraStore?: DemoStore };
 
 export function getStore(): DemoStore {
+  if (!env.demoMode) {
+    throw new Error(
+      "LIVE mode is not available in this build. Refusing to serve in-memory demo balances or transactions as live customer data. Set DEMO_MODE=true or implement and verify the persistent repository and provider adapters.",
+    );
+  }
   if (!globalForStore.__nearvoraStore) {
     globalForStore.__nearvoraStore = new DemoStore();
   }

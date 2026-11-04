@@ -89,6 +89,11 @@ class LiveOutLayerAdapter implements OutLayerAdapter {
 }
 
 export function getOutLayerAdapter(): OutLayerAdapter {
+  if (!env.demoMode) {
+    // LIVE mode must fail closed. A missing live adapter is never replaced by
+    // the deterministic demo policy engine.
+    return new LiveOutLayerAdapter();
+  }
   if (env.near.outlayerUrl && env.near.outlayerKey) {
     return new LiveOutLayerAdapter();
   }

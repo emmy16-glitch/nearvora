@@ -3,7 +3,7 @@ import type { z } from "zod";
 import type { AiUsage } from "./usage";
 import { env } from "@/lib/config/env";
 import { isAiConfigured, requireAiConfig, type AvailableModel } from "./model-config";
-import { NearAiProvider } from "./near-ai";
+import { OpenAiCompatibleProvider } from "./openai-compatible";
 
 export interface AiChatRequest {
   system: string;
@@ -56,7 +56,7 @@ let provider: AiProvider | null = null;
 
 export function getAiProvider(): AiProvider {
   if (!provider) {
-    provider = new NearAiProvider();
+    provider = new OpenAiCompatibleProvider();
   }
   return provider;
 }
@@ -66,7 +66,7 @@ export function getAiProviderStatus() {
   return {
     assistant: "Nearvora AI",
     configured,
-    mode: env.demoMode ? ("demo" as const) : ("live" as const),
+    mode: env.mode,
     planner: configured ? ("model" as const) : ("deterministic-development-planner" as const),
     note: configured
       ? "Nearvora AI is available. Financial data and execution remain enforced by the Nearvora backend."
