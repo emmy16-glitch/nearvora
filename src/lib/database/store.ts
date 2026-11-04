@@ -21,6 +21,8 @@ import {
   DEMO_CONVERSATIONS,
   DEMO_MESSAGES,
   DEMO_NOTIFICATIONS,
+  DEMO_PLANS,
+  DEMO_QUOTES,
   DEMO_TRANSACTIONS,
   DEMO_USER,
   DEMO_WALLETS,
@@ -87,6 +89,8 @@ export class DemoStore {
       this.beneficiaries.set(beneficiary.id, clone(beneficiary));
     }
     for (const bill of DEMO_BILLS) this.bills.set(bill.id, clone(bill));
+    for (const quote of DEMO_QUOTES) this.quotes.set(quote.id, clone(quote));
+    for (const plan of DEMO_PLANS) this.plans.set(plan.id, clone(plan));
     for (const conversation of DEMO_CONVERSATIONS) {
       this.conversations.set(conversation.id, clone(conversation));
     }

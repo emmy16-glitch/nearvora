@@ -2,18 +2,19 @@ import * as React from "react";
 import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 
-type Variant = "primary" | "secondary" | "ghost" | "outline" | "danger";
+type Variant = "primary" | "secondary" | "ghost" | "outline" | "danger" | "soft";
 type Size = "sm" | "md" | "lg" | "icon";
 
 const variants: Record<Variant, string> = {
   primary:
-    "bg-accent text-accent-ink hover:bg-accent-soft active:translate-y-px font-semibold shadow-[0_1px_0_rgba(255,255,255,0.25)_inset]",
+    "bg-accent text-white hover:bg-accent-soft active:translate-y-px font-semibold shadow-[0_8px_24px_-10px_rgba(124,58,237,0.9)]",
   secondary:
-    "bg-surface-3 text-fg hover:bg-[#20262d] border border-line-strong active:translate-y-px",
+    "bg-surface-3 text-fg hover:bg-surface-2 border border-line-strong active:translate-y-px",
   ghost: "bg-transparent text-muted hover:text-fg hover:bg-surface-2",
   outline:
     "bg-transparent text-fg border border-line-strong hover:bg-surface-2 active:translate-y-px",
-  danger: "bg-danger/15 text-danger border border-danger/30 hover:bg-danger/20",
+  danger: "bg-danger/12 text-danger border border-danger/30 hover:bg-danger/20",
+  soft: "bg-accent/12 text-lavender hover:bg-accent/20 border border-accent/25",
 };
 
 const sizes: Record<Size, string> = {

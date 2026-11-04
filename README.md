@@ -6,7 +6,7 @@ This repository is a complete, runnable **demo implementation**. Balances, quote
 
 ## What is implemented
 
-- Responsive app shell with dashboard, wallets, crypto receive/send, Naira deposit/withdraw/transfer, swap, activity, transaction detail, bills, assistant and account pages.
+- Responsive app shell with dashboard, wallets, crypto receive/send, Naira deposit/withdraw/transfer, swap, live demo rates, activity, transaction detail, bills, assistant and account pages.
 - One shared transaction-plan engine for both manual screens and AI requests.
 - Plan lifecycle: `DRAFT → VALIDATING → AWAITING_APPROVAL → APPROVED → EXECUTING → COMPLETED`, with `PARTIALLY_COMPLETED`, `FAILED`, `CANCELLED` and `EXPIRED` outcomes.
 - Backend-enforced approval, high-risk acknowledgment, quote freshness checks, balance re-validation at execution, idempotency and audit logging.

@@ -4,12 +4,10 @@ import * as React from "react";
 import { useSearchParams } from "next/navigation";
 import {
   AlertTriangle,
-  Bot,
   CheckCircle2,
-  ChevronRight,
-  CircleDot,
+  Clock3,
   Lock,
-  MessageSquarePlus,
+  Plus,
   Send,
   ShieldCheck,
   Sparkles,
@@ -21,18 +19,15 @@ import { useApi } from "@/lib/hooks/use-api";
 import { apiFetch, postJson, issueMessage } from "@/lib/client/api";
 import { useSession } from "@/components/providers";
 import { useToast } from "@/components/ui/toast";
-import type {
-  ChatMessage,
-  Conversation,
-  TransactionPlan,
-} from "@/lib/types/domain";
+import type { ChatMessage, Conversation, TransactionPlan } from "@/lib/types/domain";
 import { relativeTime } from "@/lib/money/format";
-import { PageHeader, Card } from "@/components/ui/card";
-import { Badge, DemoBadge, StatusBadge } from "@/components/ui/badge";
+import { Badge, DemoBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PageSkeleton, Spinner } from "@/components/ui/states";
 import { DemoNotice } from "@/components/ui/demo-notice";
+import { Modal } from "@/components/ui/modal";
 import { PlanReviewModal, PlanSummaryCard } from "@/components/transactions/plan-review";
+import { LogoMark } from "@/components/ui/logo";
 
 interface ConversationSummary extends Conversation {
   messageCount: number;
@@ -54,9 +49,8 @@ interface ChatResult {
 }
 
 const suggestions = [
-  "I have ₦1,000,000. Send ₦200,000 to my brother, convert ₦300,000 to USDT, pay my electricity bill and leave the rest.",
-  "Convert ₦100,000 to USDC",
-  "Pay my electricity bill",
+  "Convert ₦100,000 to USDT",
+  "Send ₦50,000 to John Doe",
   "How much is in my crypto wallet?",
 ];
 
@@ -75,10 +69,12 @@ function AssistantClient() {
   const [error, setError] = React.useState<string | null>(null);
   const [reviewPlan, setReviewPlan] = React.useState<TransactionPlan | null>(null);
   const [reviewOpen, setReviewOpen] = React.useState(false);
+  const [historyOpen, setHistoryOpen] = React.useState(false);
   const [hydrated, setHydrated] = React.useState(false);
   const initialised = React.useRef(false);
   const bottomRef = React.useRef<HTMLDivElement>(null);
-  const loadedConversation = React.useRef<string | null>(null);
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+  const inputRef = React.useRef<HTMLTextAreaElement>(null);
 
   const loadConversation = React.useCallback(async (id: string) => {
     try {
@@ -87,7 +83,7 @@ function AssistantClient() {
       setMessages(detail.messages);
       setPlans(Object.fromEntries(detail.plans.map((plan) => [plan.id, plan])));
       setError(null);
-      loadedConversation.current = id;
+      setHistoryOpen(false);
     } catch (caught) {
       setError(issueMessage(caught));
     }
@@ -107,7 +103,9 @@ function AssistantClient() {
   }, [prompt]);
 
   React.useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    const element = scrollRef.current;
+    if (!element) return;
+    element.scrollTo({ top: element.scrollHeight, behavior: "smooth" });
   }, [messages, sending]);
 
   const send = async (text?: string) => {
@@ -163,7 +161,8 @@ function AssistantClient() {
     setPlans({});
     setInput("");
     setError(null);
-    loadedConversation.current = null;
+    setHistoryOpen(false);
+    inputRef.current?.focus();
   };
 
   const openPlan = async (planId: string) => {
@@ -186,255 +185,238 @@ function AssistantClient() {
   const history = conversations.data ?? [];
 
   return (
-    <div className="space-y-5">
-      <PageHeader
-        eyebrow="AI mode"
-        title="Nearvora assistant"
-        description="Describe a financial outcome. The assistant checks backend data, prepares one structured plan and waits for your approval."
-        action={
-          <>
-            <Badge variant={system.ai.configured ? "accent" : "warning"}>
-              {system.ai.configured ? "Model connected" : "Dev planner"}
-            </Badge>
-            <Button variant="outline" size="sm" onClick={newChat}>
-              <MessageSquarePlus className="size-3.5" /> New chat
-            </Button>
-          </>
-        }
-      />
+    <div className="mx-auto flex max-w-3xl flex-col gap-4 pb-2">
+      <header className="flex items-center justify-between gap-3">
+        <span className="grid size-10 place-items-center rounded-full border border-accent/30 bg-accent/12 text-lavender">
+          <Sparkles className="size-[18px]" />
+        </span>
+        <h1 className="text-center text-[17px] font-semibold tracking-tight text-fg sm:text-lg">
+          AI Assistant
+        </h1>
+        <button
+          type="button"
+          onClick={() => setHistoryOpen(true)}
+          aria-label="Conversation history"
+          className="grid size-10 place-items-center rounded-full border border-line bg-surface text-muted transition-colors hover:text-fg"
+        >
+          <Clock3 className="size-[18px]" />
+        </button>
+      </header>
 
-      {!system.ai.configured ? (
-        <div className="flex items-start gap-2.5 rounded-xl border border-teal/20 bg-teal/[0.04] px-3.5 py-2.5">
-          <Sparkles className="mt-0.5 size-3.5 shrink-0 text-teal" />
-          <p className="text-[10.5px] leading-4 text-muted">
-            <strong className="text-fg">No AI model is connected.</strong> Requests use Nearvora&apos;s
-            deterministic development planner, clearly labelled in every reply. It only reads saved
-            demo beneficiaries, bills and backend balances. Configure <code>AI_API_KEY</code> to
-            enable model-based intent extraction.
+      <div className="flex items-center justify-between gap-2 px-1">
+        <div className="flex items-center gap-2">
+          <span className="size-1.5 rounded-full bg-success" aria-hidden />
+          <span className="text-[10.5px] text-muted">
+            {system.ai.configured ? "Model connected" : "Deterministic development planner"}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <DemoBadge label="Simulated" />
+          <button
+            type="button"
+            onClick={newChat}
+            className="inline-flex items-center gap-1 rounded-lg border border-line bg-surface px-2 py-1 text-[10px] font-medium text-muted transition-colors hover:text-fg"
+          >
+            <Plus className="size-3" /> New
+          </button>
+        </div>
+      </div>
+
+      <section className="flex min-h-[58dvh] flex-col overflow-hidden rounded-2xl border border-line bg-surface/60 lg:min-h-[calc(100dvh-250px)]">
+        <div ref={scrollRef} className="min-h-0 flex-1 space-y-4 overflow-y-auto px-3 py-4 sm:px-4">
+          {messages.length === 0 && !sending ? (
+            <div className="flex h-full flex-col items-center justify-center px-4 py-10 text-center">
+              <span className="grid size-14 place-items-center rounded-2xl border border-accent/25 bg-accent/10">
+                <Sparkles className="size-6 text-lavender" />
+              </span>
+              <h2 className="mt-4 text-[16px] font-semibold text-fg">
+                What would you like to do?
+              </h2>
+              <p className="mt-1.5 max-w-sm text-[11.5px] leading-5 text-muted">
+                Ask in plain language. I can prepare transfers, conversions and bill payments in
+                one plan. I never execute without your approval.
+              </p>
+              <div className="mt-5 grid w-full max-w-md gap-2">
+                {suggestions.map((suggestion) => (
+                  <button
+                    key={suggestion}
+                    type="button"
+                    onClick={() => {
+                      setInput(suggestion);
+                      inputRef.current?.focus();
+                    }}
+                    className="rounded-xl border border-line bg-surface-2/60 px-3.5 py-2.5 text-left text-[11.5px] text-muted transition-colors hover:border-accent/30 hover:text-fg"
+                  >
+                    {suggestion}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            messages.map((message) => (
+              <MessageBubble
+                key={message.id}
+                message={message}
+                plan={message.planId ? plans[message.planId] : undefined}
+                onReview={openPlan}
+                onModify={() => {
+                  setInput("Modify this plan: ");
+                  inputRef.current?.focus();
+                }}
+              />
+            ))
+          )}
+
+          {sending ? (
+            <div className="flex items-start gap-2.5">
+              <span className="grid size-9 shrink-0 place-items-center rounded-full border border-accent/25 bg-accent/10">
+                <LogoMark className="size-4" />
+              </span>
+              <div className="rounded-2xl rounded-tl-md border border-line bg-surface-2 px-3.5 py-2.5">
+                <div className="flex items-center gap-2 text-[11px] text-muted">
+                  <Spinner />
+                  Checking balances, recipients and quotes…
+                </div>
+                <p className="mt-1 text-[9px] text-muted-2">
+                  Financial tools run on the backend. Nothing is executed during planning.
+                </p>
+              </div>
+            </div>
+          ) : null}
+
+          <div ref={bottomRef} />
+        </div>
+
+        {error ? (
+          <div className="border-t border-danger/20 bg-danger/5 px-4 py-2 text-[10.5px] text-danger">
+            {error}
+          </div>
+        ) : null}
+
+        <div className="border-t border-line bg-surface/50 p-3">
+          <div className="flex items-end gap-2">
+            <textarea
+              ref={inputRef}
+              value={input}
+              onChange={(event) => setInput(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.shiftKey) {
+                  event.preventDefault();
+                  void send();
+                }
+              }}
+              rows={1}
+              maxLength={2000}
+              placeholder="Ask me anything..."
+              className="max-h-32 min-h-11 flex-1 resize-none rounded-2xl border border-line bg-surface-2 px-4 py-3 text-[12px] leading-5 text-fg outline-none placeholder:text-muted-2 focus:border-accent/50"
+              disabled={sending}
+              aria-label="Message the Nearvora assistant"
+            />
+            <button
+              type="button"
+              onClick={() => void send()}
+              disabled={sending || !input.trim()}
+              aria-label="Send message"
+              className="grid size-11 shrink-0 place-items-center rounded-full bg-accent text-white transition-colors hover:bg-accent-soft disabled:opacity-40"
+            >
+              {sending ? <Spinner className="text-white" /> : <Send className="size-[18px]" />}
+            </button>
+          </div>
+          <p className="mt-1.5 px-2 text-[9px] leading-3.5 text-muted-2">
+            The assistant prepares plans only. The backend validates balances, recipients, quotes
+            and approvals. Demo execution moves no real money.
           </p>
         </div>
-      ) : null}
+      </section>
 
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
-        <Card className="flex min-h-[560px] flex-col overflow-hidden lg:h-[calc(100dvh-230px)]">
-          <div className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-3">
-            <span className="grid size-8 place-items-center rounded-full border border-accent/25 bg-accent/10">
-              <Bot className="size-4 text-accent" />
-            </span>
-            <div className="min-w-0">
-              <p className="text-xs font-semibold text-fg">Nearvora AI</p>
-              <p className="text-[9.5px] text-muted-2">
-                {system.ai.configured ? system.ai.model ?? "Configured model" : "Deterministic development planner"}
-              </p>
-            </div>
-            <div className="ml-auto flex items-center gap-1.5">
-              <DemoBadge label="Simulated" />
-              <StatusBadge status="AWAITING_APPROVAL" />
-            </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <section className="rounded-2xl border border-line bg-surface p-4">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="size-4 text-lavender" />
+            <h2 className="text-[12px] font-semibold text-fg">Guardrails</h2>
           </div>
-
-          {history.length > 0 ? (
-            <div className="border-b border-line px-4 py-2">
-              <label className="sr-only" htmlFor="conversation-select">
-                Conversation
-              </label>
-              <select
-                id="conversation-select"
-                value={conversationId ?? ""}
-                onChange={(event) => {
-                  if (event.target.value) void loadConversation(event.target.value);
-                }}
-                className="w-full rounded-lg border border-line bg-surface px-2.5 py-1.5 text-[10.5px] text-muted outline-none focus:border-accent/50"
+          <ul className="mt-2.5 space-y-2">
+            {[
+              "Backend balances only — the model cannot invent them",
+              "No wallet keys or direct signing from the AI",
+              "Every plan needs explicit backend approval",
+              "Idempotency prevents duplicate execution",
+            ].map((item) => (
+              <li key={item} className="flex items-start gap-2 text-[10px] leading-4 text-muted">
+                <Lock className="mt-0.5 size-3 shrink-0 text-lavender" />
+                {item}
+              </li>
+            ))}
+          </ul>
+        </section>
+        <section className="rounded-2xl border border-line bg-surface p-4">
+          <div className="flex items-center gap-2">
+            <Wrench className="size-4 text-lavender" />
+            <h2 className="text-[12px] font-semibold text-fg">Manual handoff</h2>
+          </div>
+          <p className="mt-2 text-[10px] leading-4 text-muted">
+            Every AI operation has a manual equivalent using the same backend engine.
+          </p>
+          <div className="mt-2.5 grid grid-cols-2 gap-2">
+            {[
+              { href: "/transfer", label: "Send Naira" },
+              { href: "/swap", label: "Swap" },
+              { href: "/bills", label: "Pay bill" },
+              { href: "/withdraw", label: "Withdraw" },
+            ].map((link) => (
+              <a
+                key={link.href}
+                href={link.href}
+                className="rounded-lg border border-line bg-surface-2 px-2.5 py-2 text-center text-[10px] font-medium text-muted transition-colors hover:text-fg"
               >
-                {!conversationId ? <option value="">New conversation</option> : null}
-                {history.map((conversation) => (
-                  <option key={conversation.id} value={conversation.id}>
-                    {conversation.title} · {conversation.messageCount} messages
-                  </option>
-                ))}
-              </select>
-            </div>
-          ) : null}
-
-          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
-            {messages.length === 0 && !sending ? (
-              <div className="flex h-full flex-col items-center justify-center px-4 text-center">
-                <span className="grid size-12 place-items-center rounded-2xl border border-accent/20 bg-accent/[0.06]">
-                  <Sparkles className="size-5 text-accent" />
-                </span>
-                <h2 className="mt-4 text-base font-semibold text-fg">
-                  What would you like to do with your money?
-                </h2>
-                <p className="mt-1.5 max-w-sm text-[11px] leading-5 text-muted">
-                  Ask in plain language. I can prepare transfers, conversions and bill payments in
-                  one plan. I never execute without your approval.
-                </p>
-                <div className="mt-5 grid w-full max-w-lg gap-2">
-                  {suggestions.map((suggestion) => (
-                    <button
-                      key={suggestion}
-                      type="button"
-                      onClick={() => setInput(suggestion)}
-                      className="group flex items-start justify-between gap-3 rounded-xl border border-line bg-surface-2/60 px-3.5 py-2.5 text-left text-[11px] leading-4 text-muted transition-colors hover:border-accent/30 hover:text-fg"
-                    >
-                      {suggestion}
-                      <ChevronRight className="mt-0.5 size-3 shrink-0 text-muted-2 group-hover:text-accent" />
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              messages.map((message) => (
-                <MessageBubble
-                  key={message.id}
-                  message={message}
-                  plan={message.planId ? plans[message.planId] : undefined}
-                  onReview={openPlan}
-                />
-              ))
-            )}
-
-            {sending ? (
-              <div className="flex items-start gap-2.5">
-                <span className="grid size-7 shrink-0 place-items-center rounded-full border border-accent/25 bg-accent/10">
-                  <Bot className="size-3.5 text-accent" />
-                </span>
-                <div className="rounded-2xl rounded-tl-sm border border-line bg-surface-2 px-3.5 py-2.5">
-                  <div className="flex items-center gap-2 text-[10.5px] text-muted">
-                    <Spinner />
-                    Checking balances, saved recipients and quotes…
-                  </div>
-                  <p className="mt-1 text-[9px] text-muted-2">
-                    Financial tools run on the backend. Nothing is executed during planning.
-                  </p>
-                </div>
-              </div>
-            ) : null}
-
-            <div ref={bottomRef} />
+                {link.label}
+              </a>
+            ))}
           </div>
-
-          {error ? (
-            <div className="border-t border-danger/20 bg-danger/5 px-4 py-2 text-[10.5px] text-danger">
-              {error}
-            </div>
-          ) : null}
-
-          <div className="border-t border-line bg-surface/40 p-3">
-            <div className="flex items-end gap-2">
-              <textarea
-                value={input}
-                onChange={(event) => setInput(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" && !event.shiftKey) {
-                    event.preventDefault();
-                    void send();
-                  }
-                }}
-                rows={2}
-                maxLength={2000}
-                placeholder="e.g. Send ₦50,000 to my brother and convert ₦100,000 to USDT"
-                className="min-h-11 flex-1 resize-none rounded-xl border border-line bg-surface px-3 py-2.5 text-xs leading-5 text-fg outline-none placeholder:text-muted-2 focus:border-accent/50"
-                disabled={sending}
-                aria-label="Message the Nearvora assistant"
-              />
-              <Button
-                size="icon"
-                className="mb-0.5 size-10"
-                onClick={() => void send()}
-                disabled={sending || !input.trim()}
-                aria-label="Send message"
-              >
-                <Send className="size-4" />
-              </Button>
-            </div>
-            <p className="mt-1.5 px-1 text-[9px] leading-3.5 text-muted-2">
-              The assistant prepares plans only. The backend validates balances, recipients, quotes
-              and approvals. Demo execution moves no real money.
-            </p>
-          </div>
-        </Card>
-
-        <div className="space-y-4">
-          <Card className="p-4">
-            <div className="flex items-center gap-2">
-              <ShieldCheck className="size-4 text-accent" />
-              <h3 className="text-xs font-semibold text-fg">Guardrails</h3>
-            </div>
-            <ul className="mt-3 space-y-2.5">
-              {[
-                "Backend balances only — the model cannot invent them",
-                "No wallet keys or direct signing from the AI",
-                "Every plan needs explicit backend approval",
-                "High-risk plans require extra acknowledgment",
-                "Idempotency prevents duplicate execution",
-                "OutLayer policy is evaluated before demo execution",
-              ].map((item) => (
-                <li key={item} className="flex items-start gap-2 text-[10px] leading-4 text-muted">
-                  <Lock className="mt-0.5 size-3 shrink-0 text-accent" />
-                  {item}
-                </li>
-              ))}
-            </ul>
-          </Card>
-
-          <Card className="p-4">
-            <h3 className="text-xs font-semibold text-fg">Conversation history</h3>
-            <div className="mt-3 space-y-1">
-              {history.length === 0 ? (
-                <p className="text-[10px] text-muted-2">No saved conversations yet.</p>
-              ) : (
-                history.slice(0, 8).map((conversation) => (
-                  <button
-                    key={conversation.id}
-                    type="button"
-                    onClick={() => void loadConversation(conversation.id)}
-                    className={`flex w-full flex-col gap-0.5 rounded-lg px-2.5 py-2 text-left transition-colors ${
-                      conversationId === conversation.id
-                        ? "bg-surface-3 text-fg"
-                        : "text-muted hover:bg-surface-2 hover:text-fg"
-                    }`}
-                  >
-                    <span className="truncate text-[10.5px] font-medium">{conversation.title}</span>
-                    <span className="text-[9px] text-muted-2">
-                      {conversation.messageCount} messages · {relativeTime(conversation.updatedAt)}
-                    </span>
-                  </button>
-                ))
-              )}
-            </div>
-          </Card>
-
-          <Card className="p-4">
-            <h3 className="text-xs font-semibold text-fg">Manual handoff</h3>
-            <p className="mt-2 text-[10px] leading-4 text-muted">
-              Prefer direct controls? Every AI operation has a manual equivalent using the same
-              backend engine.
-            </p>
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              {[
-                { href: "/transfer", label: "Send Naira" },
-                { href: "/swap", label: "Swap" },
-                { href: "/bills", label: "Pay bill" },
-                { href: "/withdraw", label: "Withdraw" },
-              ].map((link) => (
-                <a
-                  key={link.href}
-                  href={link.href}
-                  className="rounded-lg border border-line bg-surface-2 px-2.5 py-2 text-center text-[10px] font-medium text-muted transition-colors hover:text-fg"
-                >
-                  {link.label}
-                </a>
-              ))}
-            </div>
-          </Card>
-        </div>
+        </section>
       </div>
 
       <DemoNotice>
         AI replies can be wrong. Nearvora treats every reply as untrusted input: balances, quotes,
         fees and recipients are re-derived by the backend before any plan is created or executed.
       </DemoNotice>
+
+      <Modal
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        title="Conversation history"
+        description="Saved demo conversations."
+        size="sm"
+        footer={
+          <Button size="sm" className="w-full" onClick={newChat}>
+            <Plus className="size-3.5" /> Start a new conversation
+          </Button>
+        }
+      >
+        <div className="space-y-1">
+          {history.length === 0 ? (
+            <p className="py-4 text-center text-[11px] text-muted">No saved conversations yet.</p>
+          ) : (
+            history.map((conversation) => (
+              <button
+                key={conversation.id}
+                type="button"
+                onClick={() => void loadConversation(conversation.id)}
+                className={`flex w-full flex-col gap-0.5 rounded-lg px-2.5 py-2 text-left transition-colors ${
+                  conversationId === conversation.id
+                    ? "bg-surface-3 text-fg"
+                    : "text-muted hover:bg-surface-2 hover:text-fg"
+                }`}
+              >
+                <span className="truncate text-[11px] font-medium">{conversation.title}</span>
+                <span className="text-[9px] text-muted-2">
+                  {conversation.messageCount} messages · {relativeTime(conversation.updatedAt)}
+                </span>
+              </button>
+            ))
+          )}
+        </div>
+      </Modal>
 
       <PlanReviewModal
         plan={reviewPlan}
@@ -453,22 +435,24 @@ function MessageBubble({
   message,
   plan,
   onReview,
+  onModify,
 }: {
   message: ChatMessage;
   plan?: TransactionPlan;
   onReview: (planId: string) => void;
+  onModify: () => void;
 }) {
   const isUser = message.role === "user";
-  const truncation = message.meta?.toolCalls ?? [];
+  const toolCalls = message.meta?.toolCalls ?? [];
 
   if (isUser) {
     return (
       <div className="flex items-start justify-end gap-2.5">
-        <div className="max-w-[85%] rounded-2xl rounded-tr-sm bg-accent px-3.5 py-2.5 text-[11.5px] leading-5 text-accent-ink">
+        <div className="max-w-[82%] rounded-2xl rounded-tr-md bg-accent px-3.5 py-2.5 text-[12px] leading-5 text-white">
           {message.content}
         </div>
-        <span className="grid size-7 shrink-0 place-items-center rounded-full border border-line bg-surface-2 text-muted">
-          <UserRound className="size-3.5" />
+        <span className="grid size-9 shrink-0 place-items-center rounded-full border border-line bg-surface-2 text-muted">
+          <UserRound className="size-4" />
         </span>
       </div>
     );
@@ -476,11 +460,11 @@ function MessageBubble({
 
   return (
     <div className="flex items-start gap-2.5">
-      <span className="grid size-7 shrink-0 place-items-center rounded-full border border-accent/25 bg-accent/10">
-        <Bot className="size-3.5 text-accent" />
+      <span className="grid size-9 shrink-0 place-items-center rounded-full border border-accent/25 bg-accent/10">
+        <LogoMark className="size-4" />
       </span>
       <div className="min-w-0 max-w-[88%] flex-1">
-        <div className="rounded-2xl rounded-tl-sm border border-line bg-surface-2 px-3.5 py-3">
+        <div className="rounded-2xl rounded-tl-md border border-line bg-surface-2 px-3.5 py-3">
           <MessageText content={message.content} />
           {message.meta ? (
             <div className="mt-2.5 flex flex-wrap items-center gap-1.5 border-t border-line/70 pt-2">
@@ -492,14 +476,14 @@ function MessageBubble({
                     : "System"}
               </Badge>
               <Badge variant="warning">Simulated</Badge>
-              {truncation.length > 0 ? (
+              {toolCalls.length > 0 ? (
                 <details className="group w-full">
                   <summary className="flex cursor-pointer list-none items-center gap-1 text-[9px] text-muted-2 hover:text-muted">
                     <Wrench className="size-2.5" />
-                    {truncation.length} backend tool{truncation.length === 1 ? "" : "s"} used
+                    {toolCalls.length} backend tool{toolCalls.length === 1 ? "" : "s"} used
                   </summary>
                   <div className="mt-1.5 space-y-1">
-                    {truncation.map((call, index) => (
+                    {toolCalls.map((call, index) => (
                       <div key={`${call.name}-${index}`} className="flex items-start gap-1.5">
                         {call.status === "ok" ? (
                           <CheckCircle2 className="mt-0.5 size-2.5 shrink-0 text-success" />
@@ -520,25 +504,12 @@ function MessageBubble({
 
         {plan ? (
           <div className="mt-2">
-            <PlanSummaryCard plan={plan} onReview={() => onReview(plan.id)} compact />
-          </div>
-        ) : null}
-
-        {message.meta?.missingInformation && message.meta.missingInformation.length > 0 ? (
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {[
-              { href: "/transfer", label: "Open transfer" },
-              { href: "/swap", label: "Open swap" },
-              { href: "/bills", label: "Open bills" },
-            ].map((link) => (
-              <a
-                key={link.href}
-                href={link.href}
-                className="inline-flex items-center gap-1 rounded-lg border border-line bg-surface px-2.5 py-1.5 text-[9.5px] font-medium text-muted transition-colors hover:text-fg"
-              >
-                <CircleDot className="size-2.5" /> {link.label}
-              </a>
-            ))}
+            <PlanSummaryCard
+              plan={plan}
+              onReview={() => onReview(plan.id)}
+              onModify={onModify}
+              compact
+            />
           </div>
         ) : null}
 
@@ -553,21 +524,21 @@ function MessageBubble({
 function MessageText({ content }: { content: string }) {
   const lines = content.split("\n");
   return (
-    <div className="space-y-1.5 text-[11.5px] leading-5 text-muted">
+    <div className="space-y-1.5 text-[12px] leading-5 text-muted">
       {lines.map((line, index) => {
         if (!line.trim()) return <div key={index} className="h-1" />;
         if (/^\d+\.\s/.test(line)) {
           return (
-            <p key={index} className="pl-1 text-fg">
+            <p key={index} className="pl-1 font-medium text-fg">
               {renderInline(line)}
             </p>
           );
         }
-        if (/^[-•]\s/.test(line)) {
+        if (/^[-•]\s/.test(line) || /^\s+[•·-]\s/.test(line)) {
           return (
-            <p key={index} className="flex gap-2 pl-1">
-              <span className="mt-2 size-1 shrink-0 rounded-full bg-accent" />
-              <span>{renderInline(line.replace(/^[-•]\s/, ""))}</span>
+            <p key={index} className="flex gap-2 pl-2">
+              <span className="mt-2 size-1 shrink-0 rounded-full bg-lavender" />
+              <span>{renderInline(line.replace(/^\s*[-•·]\s/, ""))}</span>
             </p>
           );
         }

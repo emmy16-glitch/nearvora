@@ -46,7 +46,7 @@ describe("transaction plan engine", () => {
     const second = createPlan(DEMO_USER.id, transferInput("50000", "create-key-123"));
 
     expect(second.id).toBe(first.id);
-    expect(getStore().listPlans(DEMO_USER.id)).toHaveLength(1);
+    expect(getStore().listPlans(DEMO_USER.id)).toHaveLength(2);
   });
 
   it("requires acknowledgment for high-risk plans", () => {
@@ -102,6 +102,6 @@ describe("transaction plan engine", () => {
 
   it("rejects transfers above the backend balance", () => {
     expect(() => createPlan(DEMO_USER.id, transferInput("2000000"))).toThrowError(ApiError);
-    expect(getStore().listPlans(DEMO_USER.id)).toHaveLength(0);
+    expect(getStore().listPlans(DEMO_USER.id)).toHaveLength(1);
   });
 });

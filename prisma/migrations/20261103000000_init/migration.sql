@@ -5,7 +5,7 @@ CREATE SCHEMA IF NOT EXISTS "public";
 CREATE TYPE "KycStatus" AS ENUM ('UNVERIFIED', 'PENDING', 'VERIFIED');
 
 -- CreateEnum
-CREATE TYPE "AssetSymbol" AS ENUM ('NGN', 'USDT', 'USDC', 'BTC', 'ETH');
+CREATE TYPE "AssetSymbol" AS ENUM ('NGN', 'USDT', 'USDC', 'BTC', 'ETH', 'SOL', 'BNB');
 
 -- CreateEnum
 CREATE TYPE "BeneficiaryType" AS ENUM ('BANK', 'CRYPTO');

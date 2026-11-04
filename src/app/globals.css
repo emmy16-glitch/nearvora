@@ -1,23 +1,25 @@
 @import "tailwindcss";
 
 :root {
-  --nv-bg: #07080a;
-  --nv-bg-soft: #0a0c0f;
-  --nv-surface: #0e1115;
-  --nv-surface-2: #13171c;
-  --nv-surface-3: #191e24;
-  --nv-line: #232930;
-  --nv-line-strong: #313941;
-  --nv-fg: #f3f5f7;
-  --nv-muted: #8b95a1;
-  --nv-muted-2: #6b7480;
-  --nv-accent: #c8f561;
-  --nv-accent-soft: #d9fa8f;
-  --nv-accent-ink: #131a05;
+  --nv-bg: #08070f;
+  --nv-bg-soft: #0b0a14;
+  --nv-surface: #11101b;
+  --nv-surface-2: #171526;
+  --nv-surface-3: #1e1b31;
+  --nv-line: #26233b;
+  --nv-line-strong: #373253;
+  --nv-fg: #f7f7fb;
+  --nv-muted: #a6a6bb;
+  --nv-muted-2: #77778f;
+  --nv-accent: #7c3aed;
+  --nv-accent-soft: #8b5cf6;
+  --nv-accent-ink: #ffffff;
+  --nv-indigo: #4934b8;
+  --nv-lavender: #b9a3ff;
+  --nv-success: #4ade80;
+  --nv-danger: #fb7185;
+  --nv-warning: #fbbf24;
   --nv-teal: #5eead4;
-  --nv-danger: #ff7a85;
-  --nv-warning: #f5c76a;
-  --nv-success: #7ee2a8;
 }
 
 @theme inline {
@@ -34,11 +36,13 @@
   --color-accent: var(--nv-accent);
   --color-accent-soft: var(--nv-accent-soft);
   --color-accent-ink: var(--nv-accent-ink);
+  --color-indigo: var(--nv-indigo);
+  --color-lavender: var(--nv-lavender);
   --color-teal: var(--nv-teal);
   --color-danger: var(--nv-danger);
   --color-warning: var(--nv-warning);
   --color-success: var(--nv-success);
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
     "Helvetica Neue", Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
     "Liberation Mono", monospace;
@@ -59,34 +63,35 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  overflow-x: hidden;
 }
 
 ::selection {
   background: var(--nv-accent);
-  color: var(--nv-accent-ink);
+  color: #ffffff;
 }
 
 :focus-visible {
-  outline: 2px solid var(--nv-accent);
+  outline: 2px solid var(--nv-accent-soft);
   outline-offset: 2px;
 }
 
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 9px;
+  height: 9px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #262d35;
+  background: #2c2844;
   border-radius: 999px;
   border: 2px solid var(--nv-bg);
 }
 
 @utility nv-container {
   width: 100%;
-  max-width: 1240px;
+  max-width: 1180px;
   margin-inline: auto;
   padding-inline: 1rem;
   @media (min-width: 640px) {
@@ -109,6 +114,13 @@ body {
       transparent 1px
     );
   background-size: 48px 48px;
+}
+
+@utility nv-brand-gradient {
+  background:
+    radial-gradient(120% 150% at 100% 0%, rgba(139, 92, 246, 0.55) 0%, transparent 52%),
+    radial-gradient(120% 140% at 0% 0%, rgba(73, 52, 184, 0.9) 0%, transparent 60%),
+    linear-gradient(135deg, #4c1d95 0%, #2a1550 46%, #120f22 100%);
 }
 
 @utility no-scrollbar {

@@ -74,10 +74,12 @@ export function OperationRow({ operation }: { operation: PlanOperation }) {
 export function PlanSummaryCard({
   plan,
   onReview,
+  onModify,
   compact = false,
 }: {
   plan: TransactionPlan;
   onReview: () => void;
+  onModify?: () => void;
   compact?: boolean;
 }) {
   const actionable = plan.status === "AWAITING_APPROVAL";
@@ -114,9 +116,14 @@ export function PlanSummaryCard({
         </div>
       </div>
       {actionable ? (
-        <div className="border-t border-line p-2.5">
-          <Button size="sm" className="w-full" onClick={onReview}>
-            Review &amp; approve plan
+        <div className="grid grid-cols-2 gap-2 border-t border-line p-2.5">
+          {onModify ? (
+            <Button variant="outline" size="sm" onClick={onModify}>
+              Modify
+            </Button>
+          ) : null}
+          <Button size="sm" className={onModify ? "" : "col-span-2"} onClick={onReview}>
+            Approve Plan
           </Button>
         </div>
       ) : plan.status === "COMPLETED" || plan.status === "PARTIALLY_COMPLETED" ? (

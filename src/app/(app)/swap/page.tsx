@@ -4,108 +4,172 @@ import * as React from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
-  ArrowDownUp,
-  ArrowLeft,
   ArrowLeftRight,
+  ArrowUpDown,
+  ChevronDown,
+  ChevronRight,
   Info,
   RefreshCw,
   ShieldCheck,
+  SlidersHorizontal,
 } from "lucide-react";
 import { useApi } from "@/lib/hooks/use-api";
 import { postJson, issueMessage, ApiClientError } from "@/lib/client/api";
 import { useToast } from "@/components/ui/toast";
-import { useCountdown } from "@/lib/hooks/use-countdown";
 import type { PortfolioSnapshot, Quote, TransactionPlan } from "@/lib/types/domain";
-import { ASSETS, type AssetSymbol } from "@/lib/config/assets";
+import {
+  ASSETS,
+  ASSET_SYMBOLS,
+  CRYPTO_SYMBOLS,
+  DEMO_NGN_RATES,
+  DEMO_NETWORK_FEES,
+  type AssetSymbol,
+} from "@/lib/config/assets";
 import { formatAmount, formatNgn, formatRate } from "@/lib/money/format";
 import { toMinor } from "@/lib/money/money";
-import { PageHeader, Card } from "@/components/ui/card";
+import { formatCountdown, useCountdown } from "@/lib/hooks/use-countdown";
+import { Card } from "@/components/ui/card";
 import { PageSkeleton, ErrorState, InlineLoader } from "@/components/ui/states";
 import { DemoNotice } from "@/components/ui/demo-notice";
-import { Badge } from "@/components/ui/badge";
-import { Input, Select } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { SegmentedTabs } from "@/components/ui/tabs";
 import { AssetIcon } from "@/components/wallets/asset-icon";
 import { PlanReviewModal } from "@/components/transactions/plan-review";
+import { NotificationBell } from "@/components/layout/app-shell";
 
-const ALL = Object.keys(ASSETS) as AssetSymbol[];
+type Mode = "swap" | "convert";
+
+function AssetPicker({
+  value,
+  options,
+  onChange,
+  label,
+}: {
+  value: AssetSymbol;
+  options: AssetSymbol[];
+  onChange: (value: AssetSymbol) => void;
+  label: string;
+}) {
+  return (
+    <div className="relative flex items-center gap-2 rounded-xl border border-line bg-surface-2 px-2.5 py-2 transition-colors hover:border-line-strong">
+      <AssetIcon symbol={value} size="sm" />
+      <span className="text-[13px] font-semibold text-fg">{value}</span>
+      <ChevronDown className="size-3.5 text-muted" aria-hidden />
+      <select
+        aria-label={label}
+        value={value}
+        onChange={(event) => onChange(event.target.value as AssetSymbol)}
+        className="absolute inset-0 cursor-pointer opacity-0"
+      >
+        {options.map((symbol) => (
+          <option key={symbol} value={symbol}>
+            {symbol} — {ASSETS[symbol].name}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
 
 function SwapClient() {
   const searchParams = useSearchParams();
   const { toast } = useToast();
   const portfolio = useApi<PortfolioSnapshot>("/api/wallets");
 
-  const initialFrom = (searchParams.get("from") ?? "NGN").toUpperCase();
-  const initialTo = (searchParams.get("to") ?? "USDT").toUpperCase();
+  const initialFrom = (searchParams.get("from") ?? "").toUpperCase();
+  const initialTo = (searchParams.get("to") ?? "").toUpperCase();
+  const [mode, setMode] = React.useState<Mode>(
+    (ASSET_SYMBOLS as string[]).includes(initialFrom) ? "convert" : "swap",
+  );
   const [from, setFrom] = React.useState<AssetSymbol>(
-    ALL.includes(initialFrom as AssetSymbol) ? (initialFrom as AssetSymbol) : "NGN",
+    (ASSET_SYMBOLS as string[]).includes(initialFrom) ? (initialFrom as AssetSymbol) : "USDT",
   );
   const [to, setTo] = React.useState<AssetSymbol>(
-    ALL.includes(initialTo as AssetSymbol) && initialTo !== initialFrom
-      ? (initialTo as AssetSymbol)
-      : "USDT",
+    (ASSET_SYMBOLS as string[]).includes(initialTo) ? (initialTo as AssetSymbol) : "BTC",
   );
   const [amount, setAmount] = React.useState("");
   const [quote, setQuote] = React.useState<Quote | null>(null);
   const [quoteLoading, setQuoteLoading] = React.useState(false);
   const [quoteError, setQuoteError] = React.useState<string | null>(null);
+  const [creating, setCreating] = React.useState(false);
   const [plan, setPlan] = React.useState<TransactionPlan | null>(null);
   const [reviewOpen, setReviewOpen] = React.useState(false);
-  const [creating, setCreating] = React.useState(false);
   const { seconds, expired } = useCountdown(quote?.expiresAt);
 
-  const fromAsset = portfolio.data?.assets.find((item) => item.symbol === from);
-  const amountMinor = /^\d+(\.\d+)?$/.test(amount.trim())
-    ? safeMinor(amount.trim(), ASSETS[from].decimals)
-    : "0";
+  const fromAsset = portfolio.data?.assets.find((asset) => asset.symbol === from);
+  const fromDecimals = ASSETS[from].decimals;
+  const amountMinor = React.useMemo(() => {
+    try {
+      return toMinor(amount.trim() || "0", fromDecimals);
+    } catch {
+      return "0";
+    }
+  }, [amount, fromDecimals]);
+
+  const insufficient =
+    Boolean(fromAsset) && BigInt(amountMinor) > BigInt(fromAsset?.available ?? "0");
 
   const fetchQuote = React.useCallback(
     async (signal?: AbortSignal) => {
-      if (!amount.trim() || !/^\d+(\.\d+)?$/.test(amount.trim())) {
+      if (!amount.trim() || !/^\d+(\.\d+)?$/.test(amount.trim()) || BigInt(amountMinor) <= 0n) {
         setQuote(null);
         setQuoteError(null);
-        return;
-      }
-      if (BigInt(safeMinor(amount.trim(), ASSETS[from].decimals)) <= 0n) {
-        setQuote(null);
         return;
       }
       setQuoteLoading(true);
       setQuoteError(null);
       try {
-        const result = await fetch("/api/quotes", {
+        const response = await fetch("/api/quotes", {
           method: "POST",
           headers: { "content-type": "application/json" },
           credentials: "same-origin",
-          cache: "no-store",
-          body: JSON.stringify({ from, to, amount: amount.trim(), side: "from" }),
           signal,
+          body: JSON.stringify({ from, to, amount: amount.trim(), side: "from" }),
         });
-        const payload = await resJson(result);
-        setQuote(payload);
+        const payload = (await response.json()) as
+          | { ok: true; data: Quote }
+          | { ok: false; error: { code: string; message: string; details?: unknown } };
+        if (!response.ok || !payload.ok) {
+          throw new ApiClientError(
+            response.status,
+            payload.ok ? "REQUEST_FAILED" : payload.error.code,
+            payload.ok ? "Quote request failed" : payload.error.message,
+          );
+        }
+        setQuote(payload.data);
       } catch (error) {
         if ((error as Error).name === "AbortError") return;
         setQuote(null);
-        setQuoteError(
-          error instanceof ApiClientError
-            ? error.message
-            : "Could not obtain a demo quote.",
-        );
+        setQuoteError(error instanceof ApiClientError ? error.message : "Could not obtain a demo quote.");
       } finally {
         if (!signal?.aborted) setQuoteLoading(false);
       }
     },
-    [amount, from, to],
+    [amount, amountMinor, from, to],
   );
 
   React.useEffect(() => {
     const controller = new AbortController();
-    const timer = setTimeout(() => void fetchQuote(controller.signal), 450);
+    const timer = setTimeout(() => void fetchQuote(controller.signal), 420);
     return () => {
       controller.abort();
       clearTimeout(timer);
     };
   }, [fetchQuote]);
+
+  const applyMode = (next: Mode) => {
+    setMode(next);
+    setAmount("");
+    setQuote(null);
+    setQuoteError(null);
+    if (next === "swap") {
+      setFrom("USDT");
+      setTo("BTC");
+    } else {
+      setFrom("NGN");
+      setTo("USDT");
+    }
+  };
 
   const flip = () => {
     setFrom(to);
@@ -120,7 +184,7 @@ function SwapClient() {
     setCreating(true);
     try {
       const created = await postJson<TransactionPlan>("/api/plans", {
-        title: `Convert ${from} to ${to}`,
+        title: mode === "swap" ? `Swap ${from} to ${to}` : `Convert ${from} to ${to}`,
         operations: [{ kind: "swap", fromAsset: from, toAsset: to, amount: amount.trim() }],
         idempotencyKey: crypto.randomUUID(),
       });
@@ -144,218 +208,223 @@ function SwapClient() {
     );
   }
 
-  const insufficient =
-    Boolean(fromAsset) &&
-    BigInt(amountMinor) > BigInt(fromAsset?.available ?? "0") &&
-    BigInt(amountMinor) > 0n;
+  const options = mode === "swap" ? CRYPTO_SYMBOLS : ASSET_SYMBOLS;
+  const toUnits = quote ? Number(quote.toAmount) / 10 ** ASSETS[to].decimals : 0;
+  const fromNgn =
+    from === "NGN"
+      ? Number(amountMinor) / 100
+      : (Number(amountMinor) / 10 ** fromDecimals) * Number(DEMO_NGN_RATES[from]);
+  const toNgn = toUnits * Number(DEMO_NGN_RATES[to]);
 
   return (
-    <div className="space-y-6">
-      <Link
-        href="/dashboard"
-        className="inline-flex items-center gap-1.5 text-[11px] font-medium text-muted transition-colors hover:text-fg"
-      >
-        <ArrowLeft className="size-3.5" /> Home
-      </Link>
+    <div className="space-y-5 pb-2">
+      <header className="flex items-center justify-between gap-3">
+        <Link
+          href="/dashboard"
+          aria-label="Go back"
+          className="grid size-10 place-items-center rounded-full text-fg transition-colors hover:bg-surface-2"
+        >
+          <ChevronRight className="size-5 rotate-180" />
+        </Link>
+        <h1 className="text-center text-[17px] font-semibold tracking-tight text-fg sm:text-lg">
+          Swap / Convert
+        </h1>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={flip}
+            aria-label="Swap from and to assets"
+            className="grid size-10 place-items-center rounded-full border border-line bg-surface text-muted transition-colors hover:text-fg"
+          >
+            <SlidersHorizontal className="size-[18px]" />
+          </button>
+          <NotificationBell className="lg:hidden" />
+        </div>
+      </header>
 
-      <PageHeader
-        eyebrow="Convert & swap"
-        title="Swap assets"
-        description="Convert Naira to crypto, crypto to Naira, or crypto to crypto. Quotes are simulated and clearly labelled."
-        action={<Badge variant="warning">Simulated quotes</Badge>}
-      />
+      <div className="mx-auto w-full max-w-xl space-y-4">
+        <SegmentedTabs
+          tabs={[
+            { value: "swap", label: "Swap" },
+            { value: "convert", label: "Convert" },
+          ]}
+          value={mode}
+          onChange={applyMode}
+        />
 
-      <div className="grid gap-5 lg:grid-cols-[1.1fr_0.9fr]">
-        <Card className="p-5 sm:p-6">
-          <div className="grid gap-3 sm:grid-cols-[1fr_auto_1fr] sm:items-end">
-            <Select label="From" value={from} onChange={(event) => setFrom(event.target.value as AssetSymbol)}>
-              {ALL.map((symbol) => (
-                <option key={symbol} value={symbol}>
-                  {symbol} — {ASSETS[symbol].name}
-                </option>
-              ))}
-            </Select>
+        <div className="space-y-3">
+          <div className="rounded-2xl border border-line bg-surface p-4">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-[11.5px] font-medium text-muted">From</p>
+              <span className="text-[10px] text-muted-2">
+                {fromAsset ? `Available ${formatAmount(fromAsset.available, from)}` : "—"}
+              </span>
+            </div>
+            <div className="mt-3 flex items-center justify-between gap-3">
+              <AssetPicker
+                label="From asset"
+                value={from}
+                options={options.filter((symbol) => symbol !== to)}
+                onChange={(symbol) => {
+                  setFrom(symbol);
+                  setAmount("");
+                  setQuote(null);
+                }}
+              />
+              <input
+                inputMode="decimal"
+                value={amount}
+                onChange={(event) => setAmount(event.target.value.replace(/[^0-9.]/g, ""))}
+                placeholder="0.00"
+                aria-label={`Amount in ${from}`}
+                className="min-w-0 flex-1 bg-transparent text-right font-mono text-[26px] font-semibold tracking-tight text-fg outline-none placeholder:text-muted-2 sm:text-[30px]"
+              />
+            </div>
+            <div className="mt-2 flex items-center justify-between gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  if (!fromAsset) return;
+                  setAmount(String(Number(fromAsset.available) / 10 ** fromDecimals));
+                }}
+                className="rounded-md border border-line px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-muted transition-colors hover:text-fg"
+              >
+                Max
+              </button>
+              <p className="text-right font-mono text-[11px] text-muted-2">
+                ≈ {formatNgn(String(Math.round(fromNgn * 100)))}
+              </p>
+            </div>
+          </div>
+
+          <div className="relative z-10 flex justify-center">
             <button
               type="button"
               onClick={flip}
-              className="mb-0.5 hidden size-10 place-items-center rounded-xl border border-line bg-surface-2 text-muted transition-colors hover:text-fg sm:grid"
-              aria-label="Swap from and to assets"
+              aria-label="Reverse swap direction"
+              className="-my-3 grid size-10 place-items-center rounded-full border border-line-strong bg-surface-2 text-lavender shadow-[0_4px_16px_rgba(0,0,0,0.45)] transition-colors hover:border-accent/50 hover:text-fg"
             >
-              <ArrowDownUp className="size-4" />
-            </button>
-            <Select label="To" value={to} onChange={(event) => setTo(event.target.value as AssetSymbol)}>
-              {ALL.filter((symbol) => symbol !== from).map((symbol) => (
-                <option key={symbol} value={symbol}>
-                  {symbol} — {ASSETS[symbol].name}
-                </option>
-              ))}
-            </Select>
-          </div>
-
-          <div className="mt-4">
-            <Input
-              label={`Amount (${from})`}
-              inputMode="decimal"
-              placeholder="0.00"
-              value={amount}
-              onChange={(event) => setAmount(event.target.value)}
-              error={insufficient ? `Insufficient ${from} balance` : undefined}
-              prefix={<AssetIcon symbol={from} size="sm" className="size-6 text-[9px]" />}
-              suffix={
-                <button
-                  type="button"
-                  className="text-[10px] font-semibold text-accent hover:underline"
-                  onClick={() => {
-                    if (!fromAsset) return;
-                    setAmount(String(Number(fromAsset.available) / 10 ** ASSETS[from].decimals));
-                  }}
-                >
-                  MAX
-                </button>
-              }
-              hint={
-                fromAsset
-                  ? `Available ${formatAmount(fromAsset.available, from)}`
-                  : "Wallet unavailable"
-              }
-            />
-          </div>
-
-          <div className="relative my-3 flex items-center justify-center">
-            <div className="absolute inset-x-0 border-t border-line" />
-            <button
-              type="button"
-              onClick={flip}
-              className="relative grid size-8 place-items-center rounded-full border border-line-strong bg-surface text-muted transition-colors hover:text-fg sm:hidden"
-              aria-label="Swap from and to assets"
-            >
-              <ArrowDownUp className="size-3.5" />
+              <ArrowUpDown className="size-[18px]" />
             </button>
           </div>
 
-          <div className="rounded-xl border border-line bg-surface-2/70 p-4">
-            <div className="flex items-center justify-between">
-              <p className="text-[10px] uppercase tracking-wider text-muted-2">You receive (estimated)</p>
+          <div className="rounded-2xl border border-line bg-surface p-4">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-[11.5px] font-medium text-muted">To</p>
               {quoteLoading ? <InlineLoader label="Quoting" /> : null}
             </div>
-            <p className="mt-1.5 font-mono text-2xl font-semibold text-fg">
-              {quote ? formatAmount(quote.toAmount, to) : `0 ${to}`}
-            </p>
-            {quote ? (
-              <p className="mt-1 text-[10.5px] text-muted-2">{formatRate(quote.rate, from, to)}</p>
-            ) : (
-              <p className="mt-1 text-[10.5px] text-muted-2">
-                Enter an amount to request a demo quote.
-              </p>
-            )}
-          </div>
-
-          {quoteError ? (
-            <p className="mt-2 rounded-lg border border-danger/25 bg-danger/5 px-3 py-2 text-[10.5px] text-danger">
-              {quoteError}
-            </p>
-          ) : null}
-
-          <div className="mt-4 space-y-2.5 rounded-xl border border-line bg-surface p-3.5">
-            <QuoteLine label="Rate" value={quote ? formatRate(quote.rate, from, to) : "—"} />
-            <QuoteLine
-              label="Nearvora fee"
-              value={quote ? `${formatAmount(quote.fee, quote.feeAsset)} (0.60%)` : "—"}
-            />
-            <QuoteLine label="Spread" value={quote ? `${(quote.spreadBps / 100).toFixed(2)}%` : "—"} />
-            <QuoteLine
-              label="Slippage tolerance"
-              value={quote ? `${(quote.slippageBps / 100).toFixed(2)}%` : "—"}
-            />
-            <QuoteLine
-              label="Quote expires"
-              value={
-                quote
-                  ? expired
-                    ? "Expired"
-                    : `in ${Math.floor(seconds / 60)}:${(seconds % 60).toString().padStart(2, "0")}`
-                  : "—"
-              }
-            />
-            <div className="flex items-center justify-between border-t border-line pt-2.5">
-              <span className="flex items-center gap-1.5 text-[10.5px] text-muted">
-                <ShieldCheck className="size-3.5 text-accent" /> Quote source
-              </span>
-              <span className="text-[10.5px] font-medium text-warning">Simulated provider</span>
+            <div className="mt-3 flex items-center justify-between gap-3">
+              <AssetPicker
+                label="To asset"
+                value={to}
+                options={options.filter((symbol) => symbol !== from)}
+                onChange={(symbol) => {
+                  setTo(symbol);
+                  setQuote(null);
+                }}
+              />
+              <div className="min-w-0 flex-1 text-right">
+                <p className="truncate font-mono text-[26px] font-semibold tracking-tight text-fg sm:text-[30px]">
+                  {quote
+                    ? new Intl.NumberFormat("en-US", { maximumFractionDigits: 8 }).format(toUnits)
+                    : "0.00"}
+                </p>
+                <p className="mt-1 font-mono text-[11px] text-muted-2">
+                  ≈ {formatNgn(String(Math.round(toNgn * 100)))}
+                </p>
+              </div>
             </div>
           </div>
+        </div>
 
-          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <p className="max-w-xs text-[10px] leading-4 text-muted-2">
-              Backend revalidates the quote and balances when you approve. No swap has executed yet.
+        {insufficient ? (
+          <p className="rounded-xl border border-danger/25 bg-danger/5 px-3 py-2 text-[11px] text-danger">
+            Insufficient {from} balance. Available {fromAsset ? formatAmount(fromAsset.available, from) : "0"}.
+          </p>
+        ) : null}
+        {quoteError ? (
+          <p className="rounded-xl border border-danger/25 bg-danger/5 px-3 py-2 text-[11px] text-danger">
+            {quoteError}
+          </p>
+        ) : null}
+
+        <div className="rounded-2xl border border-line bg-surface p-4">
+          <SummaryLine label="Rate" value={quote ? formatRate(quote.rate, from, to) : "—"} />
+          <SummaryLine
+            label="Network Fee"
+            value={`${DEMO_NETWORK_FEES[to]} ${to} (≈ ${formatNgn(
+              String(Math.round(Number(DEMO_NETWORK_FEES[to]) * Number(DEMO_NGN_RATES[to]) * 100)),
+            )})`}
+          />
+          <div className="my-2 border-t border-line" />
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-[12px] text-muted">You&apos;ll receive</span>
+            <span className="text-right font-mono text-[12px] font-semibold text-fg">
+              {quote ? `${new Intl.NumberFormat("en-US", { maximumFractionDigits: 8 }).format(toUnits)} ${to}` : "—"}
+            </span>
+          </div>
+          <div className="mt-2 flex items-center justify-between gap-3 text-[10px] text-muted-2">
+            <span className="inline-flex items-center gap-1">
+              <ShieldCheck className="size-3 text-lavender" /> Simulated quote
+            </span>
+            <span>
+              {quote && !expired ? `Expires in ${formatCountdown(seconds)}` : quote && expired ? "Quote expired" : "—"}
+            </span>
+          </div>
+        </div>
+
+        <Button
+          size="lg"
+          className="w-full"
+          onClick={createPlan}
+          loading={creating}
+          disabled={!quote || expired || quoteLoading || insufficient || Boolean(quoteError)}
+        >
+          {quote && expired ? (
+            <>
+              <RefreshCw className="size-4" /> Refresh quote
+            </>
+          ) : (
+            <>
+              <ArrowLeftRight className="size-4" /> Review {mode === "swap" ? "Swap" : "Convert"}
+            </>
+          )}
+        </Button>
+
+        <div className="flex items-center justify-between gap-2 px-1">
+          <p className="text-[10px] leading-4 text-muted-2">
+            Final amounts and fees are revalidated when you approve.
+          </p>
+          <Link href="/rates" className="shrink-0 text-[10.5px] font-medium text-lavender hover:underline">
+            View rates
+          </Link>
+        </div>
+
+        <Card className="p-4 lg:hidden">
+          <div className="flex items-start gap-2">
+            <Info className="mt-0.5 size-3.5 shrink-0 text-lavender" />
+            <p className="text-[10.5px] leading-4 text-muted">
+              {mode === "swap"
+                ? "Swap converts between crypto assets. Convert moves between Naira and crypto."
+                : "Convert lets you move between Naira and crypto at a simulated rate."}{" "}
+              Demo quotes use static reference rates.
             </p>
-            <div className="flex gap-2">
-              {quote && expired ? (
-                <Button variant="outline" size="md" onClick={() => void fetchQuote()}>
-                  <RefreshCw className="size-4" /> Refresh quote
-                </Button>
-              ) : null}
-              <Button
-                onClick={createPlan}
-                loading={creating}
-                disabled={!quote || expired || quoteLoading || insufficient || Boolean(quoteError)}
-              >
-                <ArrowLeftRight className="size-4" /> Review transaction
-              </Button>
-            </div>
           </div>
         </Card>
-
-        <div className="space-y-4">
-          <Card className="p-5">
-            <h3 className="text-sm font-semibold text-fg">Balance</h3>
-            <div className="mt-4 flex items-center gap-3">
-              <AssetIcon symbol={from} size="lg" />
-              <div>
-                <p className="text-xs font-medium text-fg">{from}</p>
-                <p className="font-mono text-[11px] text-muted">
-                  {formatAmount(fromAsset?.available ?? "0", from)}
-                </p>
-              </div>
-              <div className="ml-auto text-right">
-                <p className="text-[10px] text-muted-2">≈</p>
-                <p className="font-mono text-[11px] text-muted">
-                  {formatNgn(fromAsset?.valueNgn ?? "0")}
-                </p>
-              </div>
-            </div>
-            <div className="mt-4 flex items-start gap-2 rounded-lg border border-line bg-surface-2 p-3">
-              <Info className="mt-0.5 size-3.5 shrink-0 text-teal" />
-              <p className="text-[10px] leading-4 text-muted">
-                Rates are static demo reference rates. Live NEAR Intents routing is not configured,
-                so cross-chain execution is unavailable.
-              </p>
-            </div>
-          </Card>
-
-          <Card className="p-5">
-            <h3 className="text-sm font-semibold text-fg">Supported assets</h3>
-            <div className="mt-3 space-y-2">
-              {ALL.filter((symbol) => symbol !== "NGN").map((symbol) => (
-                <div key={symbol} className="flex items-center gap-2.5">
-                  <AssetIcon symbol={symbol} size="sm" />
-                  <span className="flex-1 text-[11px] text-fg">{symbol}</span>
-                  <span className="text-[9.5px] text-muted-2">{ASSETS[symbol].networks[0]?.name}</span>
-                </div>
-              ))}
-            </div>
-            <p className="mt-3 text-[9.5px] leading-4 text-muted-2">
-              Only networks shown here are configured for this demo. Do not assume other chains are
-              supported.
-            </p>
-          </Card>
-        </div>
       </div>
 
-      <DemoNotice>
-        This swap is simulated. No chain transaction, solver or liquidity venue is contacted, and no
-        real asset is exchanged.
-      </DemoNotice>
+      <div className="mx-auto hidden w-full max-w-xl lg:block">
+        <DemoNotice>
+          This {mode === "swap" ? "swap" : "conversion"} is simulated. No chain transaction, solver
+          or liquidity venue is contacted, and no real asset is exchanged.
+        </DemoNotice>
+      </div>
+
+      <div className="mx-auto w-full max-w-xl lg:hidden">
+        <DemoNotice>
+          Simulated quote. No chain transaction occurs and no real asset is exchanged.
+        </DemoNotice>
+      </div>
 
       <PlanReviewModal
         plan={plan}
@@ -372,36 +441,13 @@ function SwapClient() {
   );
 }
 
-function QuoteLine({ label, value }: { label: string; value: string }) {
+function SummaryLine({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between gap-3">
-      <span className="text-[10.5px] text-muted">{label}</span>
-      <span className="max-w-[62%] text-right font-mono text-[10.5px] text-fg">{value}</span>
+    <div className="flex items-center justify-between gap-3 py-1">
+      <span className="text-[12px] text-muted">{label}</span>
+      <span className="max-w-[65%] text-right font-mono text-[11.5px] text-fg">{value}</span>
     </div>
   );
-}
-
-function safeMinor(amount: string, decimals: number): string {
-  try {
-    return toMinor(amount, decimals);
-  } catch {
-    return "0";
-  }
-}
-
-async function resJson(response: Response): Promise<Quote> {
-  const payload = (await response.json()) as
-    | { ok: true; data: Quote }
-    | { ok: false; error: { code: string; message: string; details?: unknown } };
-  if (!response.ok || !payload.ok) {
-    throw new ApiClientError(
-      response.status,
-      payload.ok ? "REQUEST_FAILED" : payload.error.code,
-      payload.ok ? "Quote request failed" : payload.error.message,
-      payload.ok ? undefined : payload.error.details,
-    );
-  }
-  return payload.data;
 }
 
 export default function SwapPage() {

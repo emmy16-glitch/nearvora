@@ -19,6 +19,8 @@ enum AssetSymbol {
   USDC
   BTC
   ETH
+  SOL
+  BNB
 }
 
 enum BeneficiaryType {

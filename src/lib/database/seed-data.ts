@@ -5,26 +5,34 @@ import type {
   ChatMessage,
   Conversation,
   Notification,
+  Quote,
   Transaction,
+  TransactionPlan,
   User,
   WalletAsset,
 } from "@/lib/types/domain";
 
 export const DEMO_USER: User = {
   id: "user_demo_nearvora",
-  name: "Tobi Adebayo",
-  email: "tobi@nearvora.demo",
+  name: "Emmanuel Okunola",
+  email: "emmanuelokunola16@gmail.com",
   phone: "+234 801 555 0192",
-  kycStatus: "pending",
+  kycStatus: "verified",
   createdAt: daysAgo(84),
 };
 
+/**
+ * Demo balances. Values are internally consistent with the demo rates:
+ * NGN 1,250,000 + USDT 300 × ₦1,375 = ₦1,662,500 total portfolio.
+ */
 export const DEMO_BALANCES: { symbol: AssetSymbol; available: string; pending: string }[] = [
-  { symbol: "NGN", available: "125000000", pending: "2500000" },
-  { symbol: "USDT", available: "1845500000", pending: "0" },
-  { symbol: "USDC", available: "420000000", pending: "0" },
-  { symbol: "BTC", available: "2640000", pending: "0" },
-  { symbol: "ETH", available: "840000000000000000", pending: "0" },
+  { symbol: "NGN", available: "125000000", pending: "0" },
+  { symbol: "USDT", available: "300000000", pending: "0" },
+  { symbol: "USDC", available: "0", pending: "0" },
+  { symbol: "BTC", available: "100000", pending: "0" },
+  { symbol: "ETH", available: "0", pending: "0" },
+  { symbol: "SOL", available: "0", pending: "0" },
+  { symbol: "BNB", available: "0", pending: "0" },
 ];
 
 export const DEMO_BENEFICIARIES: Beneficiary[] = [
@@ -32,9 +40,9 @@ export const DEMO_BENEFICIARIES: Beneficiary[] = [
     id: "ben_brother",
     userId: DEMO_USER.id,
     type: "bank",
-    name: "Emmanuel Okafor",
+    name: "John Doe",
     nickname: "Brother",
-    bankName: "GTBank",
+    bankName: "Providus Bank",
     accountNumber: "0123456789",
     risk: "trusted",
     createdAt: daysAgo(60),
@@ -96,8 +104,18 @@ export const DEMO_BILLS: Bill[] = [
   },
 ];
 
-export const DEMO_WALLETS: WalletAsset[] = DEMO_BALANCES.map((balance, index) => ({
-  id: ["wa_ngn", "wa_usdt", "wa_usdc", "wa_btc", "wa_eth"][index],
+const walletIds: Record<AssetSymbol, string> = {
+  NGN: "wa_ngn",
+  USDT: "wa_usdt",
+  USDC: "wa_usdc",
+  BTC: "wa_btc",
+  ETH: "wa_eth",
+  SOL: "wa_sol",
+  BNB: "wa_bnb",
+};
+
+export const DEMO_WALLETS: WalletAsset[] = DEMO_BALANCES.map((balance) => ({
+  id: walletIds[balance.symbol],
   userId: DEMO_USER.id,
   symbol: balance.symbol,
   available: balance.available,
@@ -114,55 +132,55 @@ export const DEMO_TRANSACTIONS: Transaction[] = [
     type: "deposit",
     status: "completed",
     direction: "in",
-    title: "Naira deposit",
-    description: "Demo bank transfer received",
+    title: "Salary Credit",
+    description: "From ACME Ltd",
     asset: "NGN",
-    amount: "25000000",
+    amount: "50000000",
     fee: "0",
-    counterparty: "Demo virtual account",
-    hoursAgo: 31,
+    counterparty: "ACME Ltd",
+    hoursAgo: 20,
   }),
   tx({
     id: "tx_002",
     reference: "NVV-7C1M4P-2",
-    type: "swap",
+    type: "transfer",
     status: "completed",
-    direction: "neutral",
-    title: "Converted NGN to USDT",
-    description: "Simulated conversion at demo rate",
+    direction: "out",
+    title: "Transfer",
+    description: "To John Doe",
     asset: "NGN",
-    amount: "15000000",
-    fee: "90000",
-    counterparty: "Nearvora swap",
-    hoursAgo: 56,
+    amount: "10000000",
+    fee: "10000",
+    counterparty: "John Doe",
+    hoursAgo: 30,
   }),
   tx({
     id: "tx_003",
     reference: "NVV-5A8R2T-3",
-    type: "transfer",
+    type: "withdrawal",
     status: "completed",
     direction: "out",
-    title: "Transfer to Emmanuel Okafor",
-    description: "GTBank ••6789",
+    title: "Withdrawal",
+    description: "To GTBank",
     asset: "NGN",
-    amount: "8500000",
+    amount: "5000000",
     fee: "10000",
-    counterparty: "Emmanuel Okafor",
-    hoursAgo: 79,
+    counterparty: "GTBank",
+    hoursAgo: 44,
   }),
   tx({
     id: "tx_004",
     reference: "NVV-3D6Y1U-4",
-    type: "bill_payment",
+    type: "swap",
     status: "completed",
-    direction: "out",
-    title: "Electricity payment",
-    description: "Ikeja Electric • Home prepaid meter",
-    asset: "NGN",
-    amount: "1840000",
-    fee: "10000",
-    counterparty: "Ikeja Electric (IKEDC)",
-    hoursAgo: 102,
+    direction: "neutral",
+    title: "Swapped NGN → USDT",
+    description: "Simulated conversion at demo rate",
+    asset: "USDT",
+    amount: "150000000",
+    fee: "90000",
+    counterparty: "Nearvora swap",
+    hoursAgo: 52,
   }),
   tx({
     id: "tx_005",
@@ -170,27 +188,27 @@ export const DEMO_TRANSACTIONS: Transaction[] = [
     type: "crypto_receive",
     status: "completed",
     direction: "in",
-    title: "USDT received",
-    description: "NEAR Testnet (demo)",
+    title: "Received USDT",
+    description: "From 0x71…4e2f",
     asset: "USDT",
-    amount: "500000000",
+    amount: "100000000",
     fee: "0",
-    counterparty: "demo_usdt_sender_nearvora",
-    hoursAgo: 126,
+    counterparty: "0x71…4e2f",
+    hoursAgo: 66,
   }),
   tx({
     id: "tx_006",
     reference: "NVV-2H5J8L-6",
-    type: "withdrawal",
-    status: "pending",
+    type: "transfer",
+    status: "completed",
     direction: "out",
-    title: "Naira withdrawal",
-    description: "Access Bank ••4321 — awaiting demo settlement",
+    title: "Bank Transfer",
+    description: "To Providus Bank",
     asset: "NGN",
-    amount: "12000000",
+    amount: "20000000",
     fee: "10000",
-    counterparty: "Adaeze Nwosu",
-    hoursAgo: 18,
+    counterparty: "Providus Bank",
+    hoursAgo: 78,
   }),
   tx({
     id: "tx_007",
@@ -265,7 +283,7 @@ export const DEMO_MESSAGES: ChatMessage[] = [
     id: "msg_welcome_user",
     conversationId: "conv_welcome",
     role: "user",
-    content: "What can you help me do with my money?",
+    content: "Convert 100k to USDT and send it to my wallet",
     createdAt: daysAgo(1),
   },
   {
@@ -273,7 +291,8 @@ export const DEMO_MESSAGES: ChatMessage[] = [
     conversationId: "conv_welcome",
     role: "assistant",
     content:
-      "I can review your balances, prepare bank transfers, convert between Naira and crypto, pay bills, and build a single plan you approve. In this demo, every balance and execution is simulated. Tell me what you want to do — for example, “Send ₦50,000 to my brother and convert ₦100,000 to USDT.”",
+      "Got it! Here's the plan:\n\n1. Convert ₦100,000 to USDT\n   • Estimated: ~64.5 USDT\n\n2. Send 64.5 USDT to:\n   • 0x71…4e2f\n\nTotal Fee: ~$0.50",
+    planId: "plan_welcome_demo",
     meta: {
       simulated: true,
       planner: "system",
@@ -282,6 +301,77 @@ export const DEMO_MESSAGES: ChatMessage[] = [
       ],
     },
     createdAt: daysAgo(1),
+  },
+];
+
+const welcomeExpiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+
+export const DEMO_QUOTES: Quote[] = [
+  {
+    id: "quote_welcome_demo",
+    userId: DEMO_USER.id,
+    from: "NGN",
+    to: "USDT",
+    fromAmount: "10000000",
+    toAmount: "72037890",
+    rate: "0.000724727272727272",
+    fee: "60000",
+    feeAsset: "NGN",
+    spreadBps: 35,
+    slippageBps: 0,
+    simulated: true,
+    expiresAt: welcomeExpiry,
+    createdAt: daysAgo(0.1),
+  },
+];
+
+export const DEMO_PLANS: TransactionPlan[] = [
+  {
+    id: "plan_welcome_demo",
+    userId: DEMO_USER.id,
+    conversationId: "conv_welcome",
+    status: "AWAITING_APPROVAL",
+    title: "Convert NGN and send USDT",
+    summary: "Convert ₦100,000 to USDT and send it to the demo wallet.",
+    operations: [
+      {
+        id: "op_welcome_swap",
+        kind: "swap",
+        status: "pending",
+        title: "Convert NGN to USDT",
+        asset: "NGN",
+        amount: "10000000",
+        fee: "60000",
+        targetAsset: "USDT",
+        targetAmount: "72037890",
+        rate: "0.000724727272727272",
+        quoteId: "quote_welcome_demo",
+        recipientDetail: "₦100,000.00 → 72.03789 USDT",
+        simulated: true,
+      },
+      {
+        id: "op_welcome_send",
+        kind: "crypto_transfer",
+        status: "pending",
+        title: "Send USDT to demo wallet",
+        asset: "USDT",
+        amount: "72037890",
+        fee: "800000",
+        network: "Ethereum",
+        recipientDetail: "0x71…4e2f",
+        simulated: true,
+      },
+    ],
+    warnings: [],
+    totalNgn: "10000000",
+    remainingNgn: "115000000",
+    riskLevel: "low",
+    requiresAcknowledgment: false,
+    simulated: true,
+    source: "ai",
+    createdAt: daysAgo(1),
+    updatedAt: daysAgo(1),
+    expiresAt: welcomeExpiry,
   },
 ];
 
@@ -312,6 +402,10 @@ function networkFor(symbol: AssetSymbol): string {
       return "bitcoin-testnet";
     case "ETH":
       return "ethereum-sepolia";
+    case "SOL":
+      return "solana-testnet";
+    case "BNB":
+      return "bsc-testnet";
     case "NGN":
       return "ngn-bank";
     default:
