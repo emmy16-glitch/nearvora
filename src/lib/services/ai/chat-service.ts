@@ -271,11 +271,15 @@ function buildPlanMessage(
         operation.fee !== "0"
           ? ` (fee ${formatAmount(operation.fee, operation.asset)})`
           : "";
-      const recipient = operation.recipientName
-        ? ` to ${operation.recipientName}`
-        : operation.recipientDetail
-          ? ` · ${operation.recipientDetail}`
-          : "";
+      const nameInTitle = operation.recipientName
+        ? operation.title.toLowerCase().includes(operation.recipientName.toLowerCase())
+        : false;
+      const recipient =
+        operation.recipientName && !nameInTitle
+          ? ` to ${operation.recipientName}`
+          : operation.recipientDetail
+            ? ` · ${operation.recipientDetail}`
+            : "";
       return `${index + 1}. ${operation.title}${recipient} — ${formatAmount(operation.amount, operation.asset)}${target}${fee}`;
     })
     .join("\n");

@@ -30,6 +30,8 @@ export const NEARVORA_AI_INTENT_PROMPT = [
   "Amounts must be decimal strings in the SOURCE asset (NGN for transfers, bills, deposits and withdrawals).",
   "Always include every schema field in each operation. Use null for fields that are not relevant or not provided; never omit a field.",
   "If a required value is missing, add a specific question to missingInformation and omit that operation.",
+  "For a saved bill with a non-zero outstanding amount, leave the bill payment amount null and let the backend use the saved outstanding balance; do not ask for the amount in that case. Still ask for an amount when no saved bill or outstanding balance exists.",
+  "Networks must come from the supportedNetworks context. If an asset has exactly one supported network, leave network null and the backend will select it. Never invent or suggest a network that is not in the context.",
   "The user may state a starting balance; ignore it for calculations because the backend uses actual balances.",
   "A request to leave the remaining balance is not an operation; record it as an assumption.",
 ].join(" ");

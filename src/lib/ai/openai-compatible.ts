@@ -164,7 +164,7 @@ export class OpenAiCompatibleProvider implements AiProvider {
         system: request.system,
         messages: request.messages,
         temperature: request.temperature ?? 0,
-        maxOutputTokens: request.maxOutputTokens ?? Math.min(config.maxOutputTokens, 900),
+        maxOutputTokens: request.maxOutputTokens ?? config.maxOutputTokens,
         maxRetries: 1,
         abortSignal: request.abortSignal ?? AbortSignal.timeout(config.timeoutMs),
       });
