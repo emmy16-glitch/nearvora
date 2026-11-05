@@ -26,6 +26,9 @@ export interface IntentsQuoteRequest {
   to: AssetSymbol;
   /** Amount in the smallest unit of the source asset. */
   amount: string;
+  /** Optional exact 1Click asset IDs, normally chosen from GET /v0/tokens. */
+  originAssetId?: string;
+  destinationAssetId?: string;
   recipient?: string;
   recipientType?: OneClickRecipientType;
   refundTo?: string;
@@ -71,14 +74,15 @@ export class IntentsError extends Error {
 /**
  * NEAR Intents integration boundary.
  *
- * The live adapter talks to the official 1Click Swap API. Nearvora still runs
- * with simulated quotes in demo mode; LIVE runtime execution remains disabled
- * until custody, signing and settlement reconciliation exist.
+ * The live adapter talks to the official 1Click Swap API. Live swaps are
+ * self-custody: the user deposits from their own wallet. Nearvora does not
+ * custody funds or sign blockchain transactions.
  */
 export interface NearIntentsAdapter {
   readonly name: string;
   readonly mode: "demo" | "live";
   getSupportedAssets(): IntentsAssetSupport[];
+  getSupportedTokens(): Promise<OneClickToken[]>;
   isConfigured(): boolean;
   getQuote(request: IntentsQuoteRequest): Promise<IntentsQuote>;
   getStatus(depositAddress: string, depositMemo?: string): Promise<OneClickStatusResponse>;
@@ -101,6 +105,14 @@ class DemoNearIntentsAdapter implements NearIntentsAdapter {
 
   isConfigured(): boolean {
     return false;
+  }
+
+  async getSupportedTokens(): Promise<OneClickToken[]> {
+    throw new IntentsError(
+      503,
+      "INTENTS_NOT_CONFIGURED",
+      "NEAR Intents token discovery requires a configured 1Click API key.",
+    );
   }
 
   async getQuote(): Promise<IntentsQuote> {
@@ -204,8 +216,12 @@ export class OneClickNearIntentsAdapter implements NearIntentsAdapter {
     }
 
     const tokens = await this.getSupportedTokens();
-    const originAsset = this.resolveToken(from, tokens);
-    const destinationAsset = this.resolveToken(to, tokens);
+    const originAsset = request.originAssetId?.trim()
+      ? this.resolveProvidedToken(request.originAssetId, from, tokens, "origin")
+      : this.resolveToken(from, tokens);
+    const destinationAsset = request.destinationAssetId?.trim()
+      ? this.resolveProvidedToken(request.destinationAssetId, to, tokens, "destination")
+      : this.resolveToken(to, tokens);
 
     const recipient = request.recipient?.trim() || env.near.intentsRecipient;
     if (!recipient) {
@@ -244,7 +260,15 @@ export class OneClickNearIntentsAdapter implements NearIntentsAdapter {
       }),
     );
 
-    return toIntentsQuote(from, to, response);
+    const originToken = tokens.find((token) => token.assetId === originAsset);
+    const destinationToken = tokens.find((token) => token.assetId === destinationAsset);
+    return toIntentsQuote(
+      from,
+      to,
+      response,
+      originToken?.decimals ?? ASSETS[from].decimals,
+      destinationToken?.decimals ?? ASSETS[to].decimals,
+    );
   }
 
   async getStatus(depositAddress: string, depositMemo?: string): Promise<OneClickStatusResponse> {
@@ -267,6 +291,30 @@ export class OneClickNearIntentsAdapter implements NearIntentsAdapter {
         error instanceof Error ? error.message : `1Click cannot quote ${symbol}.`,
       );
     }
+  }
+
+  private resolveProvidedToken(
+    assetId: string,
+    symbol: AssetSymbol,
+    tokens: OneClickToken[],
+    side: "origin" | "destination",
+  ): string {
+    const token = tokens.find((item) => item.assetId === assetId.trim());
+    if (!token) {
+      throw new IntentsError(
+        422,
+        "INTENTS_INVALID_ASSET",
+        `The selected ${side} asset is not listed by 1Click.`,
+      );
+    }
+    if (token.symbol.toUpperCase() !== symbol) {
+      throw new IntentsError(
+        422,
+        "INTENTS_ASSET_MISMATCH",
+        `The selected ${side} asset does not match ${symbol}.`,
+      );
+    }
+    return token.assetId;
   }
 
   private assertConfigured(): void {
@@ -311,6 +359,8 @@ function toIntentsQuote(
   from: AssetSymbol,
   to: AssetSymbol,
   response: OneClickQuoteResponse,
+  fromDecimals: number,
+  toDecimals: number,
 ): IntentsQuote {
   const quote: OneClickQuote = response.quote;
   const now = Date.now();
@@ -321,7 +371,7 @@ function toIntentsQuote(
     amountIn: quote.amountIn,
     amountOut: quote.amountOut,
     minAmountOut: quote.minAmountOut,
-    rate: deriveRate(quote, ASSETS[from].decimals, ASSETS[to].decimals),
+    rate: deriveRate(quote, fromDecimals, toDecimals),
     expiresAt: quote.deadline ?? new Date(now + DEFAULT_DEADLINE_MS).toISOString(),
     depositAddress: quote.depositAddress,
     depositMemo: quote.depositMemo,

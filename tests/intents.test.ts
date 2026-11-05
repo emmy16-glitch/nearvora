@@ -115,14 +115,36 @@ describe("1Click client", () => {
   });
 
   it("passes the deposit memo to the status endpoint", async () => {
+    const quoteResponse = {
+      timestamp: QUOTE_RESPONSE.timestamp,
+      signature: QUOTE_RESPONSE.signature,
+      quoteRequest: QUOTE_RESPONSE.quoteRequest,
+      quote: QUOTE_RESPONSE.quote,
+    };
     const status = {
       correlationId: "corr_123",
-      quoteResponse: QUOTE_RESPONSE,
+      quoteResponse,
       status: "SUCCESS",
       updatedAt: "2026-01-01T00:02:00.000Z",
       swapDetails: {
+        depositedAmount: null,
+        depositedAmountUsd: null,
+        depositedAmountFormatted: null,
         intentHashes: ["intent_1"],
         nearTxHashes: ["near_tx"],
+        amountIn: null,
+        amountInFormatted: null,
+        amountInUsd: null,
+        amountOut: null,
+        amountOutFormatted: null,
+        amountOutUsd: null,
+        slippage: null,
+        refundedAmount: "0",
+        refundedAmountFormatted: "0",
+        refundedAmountUsd: "0",
+        refundReason: null,
+        refundFee: "300000",
+        withdrawFee: "300000",
         originChainTxHashes: [{ hash: "0xabc", explorerUrl: "https://explorer/tx/0xabc" }],
         destinationChainTxHashes: [],
       },

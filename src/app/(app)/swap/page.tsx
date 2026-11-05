@@ -400,6 +400,19 @@ function SwapClient() {
           </Link>
         </div>
 
+        <Link
+          href="/swap/live"
+          className="flex items-center justify-between gap-3 rounded-2xl border border-accent/25 bg-accent/5 p-4 transition-colors hover:border-accent/50"
+        >
+          <div className="min-w-0">
+            <p className="text-[12px] font-semibold text-fg">Live cross-chain swap</p>
+            <p className="mt-0.5 text-[10.5px] leading-4 text-muted">
+              Real 1Click quote and self-custody deposit. Nearvora never holds your funds.
+            </p>
+          </div>
+          <ChevronRight className="size-4 shrink-0 text-accent" />
+        </Link>
+
         <Card className="p-4 lg:hidden">
           <div className="flex items-start gap-2">
             <Info className="mt-0.5 size-3.5 shrink-0 text-lavender" />

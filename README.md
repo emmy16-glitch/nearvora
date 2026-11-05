@@ -15,7 +15,8 @@ This repository is a complete, runnable **demo implementation**. Balances, quote
 - Server-side **Groq** or **NEAR AI Cloud** integration through an OpenAI-compatible client, with model discovery, timeouts, bounded retries, usage/cost tracking, a health check and a labelled deterministic fallback planner for demo mode.
 - Structured intent extraction plus text-only answers to general account questions. The model never supplies balances or executes operations; plans are rebuilt from backend data.
 - Controlled backend AI helpers for balances, saved beneficiaries, bills and quotes (not exposed as unrestricted model tools).
-- Simulated quote provider, outbound policy adapter (OutLayer boundary), NEAR Intents boundary with a typed 1Click quote/status client, payment-provider boundary and demo accounting ledger.
+- Simulated quote provider for the demo swap screen, plus a live self-custody NEAR Intents path: typed 1Click client, real quotes, deposit submission, status tracking and settlement records.
+- Outbound policy adapter (OutLayer boundary), payment-provider boundary and demo accounting ledger.
 - Explicit DEMO/LIVE runtime modes. LIVE mode fails closed until persistent storage and verified provider adapters exist.
 - Prisma/PostgreSQL schema, initial SQL migration and seed script.
 - Unit and flow tests for money arithmetic, plan creation/approval/execution, idempotency, risk gates and AI fallback planning.
@@ -41,6 +42,18 @@ No API keys or database are required for demo mode.
    > I have ₦1,000,000. Send ₦200,000 to my brother, convert ₦300,000 to USDT, pay my electricity bill and leave the rest.
 5. Review the combined AI plan. Nothing executes until you approve it.
 6. Use **Account → Reset demo data** to restore the seed.
+
+### Live 1Click swaps
+
+`/swap/live` executes real cross-chain swaps through NEAR Intents 1Click while keeping Nearvora non-custodial:
+
+1. Set `NEAR_INTENTS_API_KEY` to a partner JWT (server-side only).
+2. Choose the origin/destination asset and network, enter the amount, destination address and origin-chain refund address.
+3. Nearvora requests a real 1Click quote and shows the exact deposit address, memo and amount.
+4. Send the exact amount from your own wallet, optionally submit the transaction hash.
+5. Nearvora polls 1Click status and records the settlement in activity when it succeeds.
+
+Live swaps do **not** debit or credit Nearvora demo balances. The deposit is self-custody, and live swap records are in memory unless durable persistence is added.
 
 ## Environment
 
@@ -213,7 +226,8 @@ NEXT_TEST_WASM=1 npx next build --webpack
 ## Current limitations
 
 - Demo runtime persistence only; the Prisma repository adapter is not wired. Restarting the server resets data.
-- No real NEAR Intents quotes, OutLayer attestations, payment settlement or Formance postings.
+- Live 1Click swaps require the user to fund the deposit address from their own wallet; Nearvora demo balances are not debited. OutLayer attestations, Naira payment settlement and Formance postings are not live.
+- Live swap records use the in-memory store and reset on restart.
 - No production authentication/registration/password recovery. The signed demo session is not a login system.
 - No live Flutterwave/Paystack/Monnify adapter, webhook event processing, duplicate-event handling or reconciliation.
 - No live wallet creation, key management, signing or blockchain broadcasting. All addresses and balances are demo values.

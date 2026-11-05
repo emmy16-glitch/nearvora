@@ -105,6 +105,33 @@ export const depositSchema = z.object({
   idempotencyKey: idempotencyKeySchema.optional(),
 });
 
+export const createLiveSwapSchema = z
+  .object({
+    from: assetSymbolSchema,
+    to: assetSymbolSchema,
+    amount: amountSchema,
+    originAssetId: z.string().trim().min(3).max(300).optional(),
+    destinationAssetId: z.string().trim().min(3).max(300).optional(),
+    recipient: z.string().trim().min(8).max(200),
+    refundTo: z.string().trim().min(8).max(200),
+    depositType: z.enum(["ORIGIN_CHAIN", "INTENTS", "CONFIDENTIAL_INTENTS"]).optional(),
+    recipientType: z
+      .enum(["DESTINATION_CHAIN", "INTENTS", "CONFIDENTIAL_INTENTS"])
+      .optional(),
+    refundType: z
+      .enum(["ORIGIN_CHAIN", "INTENTS", "CONFIDENTIAL_INTENTS"])
+      .optional(),
+    slippageBps: z.number().int().min(1).max(5000).optional(),
+  })
+  .refine((value) => value.from !== value.to, {
+    message: "Choose two different assets",
+    path: ["to"],
+  });
+
+export const liveSwapDepositSchema = z.object({
+  txHash: z.string().trim().min(8, "Enter the deposit transaction hash").max(200),
+});
+
 export const chatSchema = z.object({
   conversationId: z.string().min(1).optional(),
   message: z.string().trim().min(2, "Tell the assistant what you need").max(2000),
@@ -132,3 +159,4 @@ export type CreatePlanInput = z.infer<typeof createPlanSchema>;
 export type PlanOperationInput = z.infer<typeof planOperationInputSchema>;
 export type QuoteRequestInput = z.infer<typeof quoteRequestSchema>;
 export type ChatInput = z.infer<typeof chatSchema>;
+export type CreateLiveSwapInput = z.infer<typeof createLiveSwapSchema>;

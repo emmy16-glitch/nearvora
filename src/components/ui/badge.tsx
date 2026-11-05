@@ -60,6 +60,12 @@ const statusVariants: Record<string, Variant> = {
   low: "success",
   medium: "warning",
   high: "danger",
+  PENDING_DEPOSIT: "warning",
+  KNOWN_DEPOSIT_TX: "info",
+  INCOMPLETE_DEPOSIT: "warning",
+  PROCESSING: "info",
+  SUCCESS: "success",
+  REFUNDED: "warning",
 };
 
 export function StatusBadge({ status }: { status: string }) {

@@ -10,6 +10,11 @@ export function proxy(request: NextRequest) {
   if (pathname.startsWith("/api/health")) {
     return NextResponse.next();
   }
+  // Live 1Click swaps use their own memory repository and do not depend on the
+  // demo ledger. They still require a valid signed session.
+  if (pathname.startsWith("/api/intents")) {
+    return NextResponse.next();
+  }
 
   return NextResponse.json(
     {

@@ -30,7 +30,7 @@ export function systemStatus() {
       outlayerMode: outlayer.mode,
       liveExecution: false,
       note: intents.isConfigured()
-        ? "1Click quoting and status tracking are configured. Live settlement and custody remain disabled in this build."
+        ? "1Click live swaps are enabled. Deposits are self-custody; Nearvora never holds customer funds."
         : "NEAR Intents and OutLayer live execution are not configured in this build.",
     },
     payments: {

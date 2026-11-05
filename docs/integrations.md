@@ -6,10 +6,10 @@ This document records what is genuinely implemented, what is simulated, and what
 
 | Mode | Behaviour |
 | --- | --- |
-| `DEMO_MODE=true` (default) | In-memory demo data, simulated providers, clearly labelled demo execution. |
-| `DEMO_MODE=false` | Fails closed. The in-memory store refuses to serve data, simulated quotes/rates/plans are rejected, and `src/proxy.ts` returns `LIVE_RUNTIME_UNAVAILABLE` for API routes. |
+| `DEMO_MODE=true` (default) | In-memory demo data, simulated Naira providers and demo plans. Live self-custody 1Click swaps are available at `/swap/live`. |
+| `DEMO_MODE=false` | The demo ledger and simulated provider paths fail closed. `src/proxy.ts` blocks normal API routes but allows `/api/intents` so live 1Click swaps can run with their own in-memory repository. Production auth and durable persistence are still required. |
 
-LIVE mode is not implemented in this build. It must not be enabled for customers until the requirements below are complete and verified.
+Custodial LIVE execution is not implemented. Users can execute live 1Click swaps by depositing from their own wallet; Nearvora never holds those funds.
 
 ## AI provider (Groq / NEAR AI Cloud)
 
@@ -83,25 +83,30 @@ Implemented:
   - `POST /v0/deposit/submit`.
 - Live `OneClickNearIntentsAdapter` with deterministic asset resolution, optional `NEAR_INTENTS_ASSET_MAP` overrides, typed errors and no credential logging.
 - Demo and live adapter selection based on `NEAR_INTENTS_API_KEY` (or explicit `NEAR_INTENTS_ALLOW_UNAUTHENTICATED`) and `NEAR_INTENTS_API_URL`.
+- Live self-custody swap execution through 1Click:
+  - `GET /api/intents/tokens` exposes supported 1Click assets/networks; the UI sends exact origin/destination asset IDs.
+  - `POST /api/intents/swaps` requests a real quote, validates the destination/refund addresses and token selection, uses on-chain token decimals and stores the deposit address.
+  - `POST /api/intents/swaps/[id]/deposit` reports the user's origin-chain transaction hash.
+  - `GET /api/intents/swaps/[id]` polls 1Click status and records settlement on success.
+  - `/swap/live` UI collects addresses, shows the deposit address/memo, and tracks the swap.
 - OutLayer adapter boundary that fails closed in LIVE mode.
 
 Not implemented:
 
-- Wiring live 1Click quotes into the swap UI and plan engine; `POST /api/quotes` still uses the clearly labelled simulated provider.
-- Wallet creation, key management, signing, broadcasting or chain confirmation.
-- Funding an `ORIGIN_CHAIN` or `INTENTS` deposit from Nearvora custody, and settling/refunding live swaps.
+- Debiting or crediting Nearvora demo balances for live swaps. The 1Click deposit is self-custody, so funds move between the user's wallets.
+- Custodial funding of an `ORIGIN_CHAIN` or `INTENTS` deposit, or automated refunds.
+- Durable persistence for live swap records across process restarts and instances.
 - Quote signature verification against the 1Click signing key.
 - OutLayer attestation/execution API contract and credentials.
 - Formance ledger postings and reconciliation.
 
-Required before LIVE:
+Required before production LIVE:
 
-1. Add runtime persistence and a production session store so LIVE API routes are no longer blocked by `src/proxy.ts`.
-2. Decide the custody model and fund either an origin-chain deposit address or an Intents account for each quote.
-3. Implement key management with a protected signer or MPC/chain-signature setup; never expose keys to the model or browser.
-4. Implement independent transaction confirmation, status polling, refund handling and reconciliation.
-5. Verify 1Click quote/status signatures and persist the full signed quote response.
-6. Obtain all required approvals and legal/compliance sign-off.
+1. Add durable persistence and a production session/auth store for live swap records and users.
+2. Add a protected signer or MPC/chain-signature setup if Nearvora will ever fund deposits.
+3. Poll/timeout terminal states, surface refund reasons and reconcile 1Click settlements against the ledger.
+4. Verify 1Click quote/status signatures and persist the full signed quote response.
+5. Add provider/legal/compliance sign-off for self-custody swap execution in each supported jurisdiction.
 
 ### 1Click notes
 
@@ -109,7 +114,7 @@ Required before LIVE:
 - Authenticated partner JWTs use the partner fee schedule; unauthenticated requests add 0.25% and are disabled unless `NEAR_INTENTS_ALLOW_UNAUTHENTICATED=true`.
 - Amounts are integer strings in the asset's smallest unit; never send decimal strings.
 - Default asset selection prefers NEAR for stablecoins, BTC on Bitcoin, and so on. Use `NEAR_INTENTS_ASSET_MAP` when a deployment needs an exact assetId.
-- Quotes default to `INTENTS` deposit/refund types using the configured NEAR account. Supply an explicit `refundTo` (and optionally `depositType`/`refundType`) to use the standard `ORIGIN_CHAIN` flow.
+- Direct adapter calls default to `INTENTS` deposit/refund types using the configured NEAR account. The `/swap/live` flow explicitly uses `ORIGIN_CHAIN` deposits and requires both a destination address and an origin-chain refund address.
 - Naira is not settled by NEAR Intents; the adapter rejects NGN rather than inventing a route.
 
 ## Database and authentication

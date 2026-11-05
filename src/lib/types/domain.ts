@@ -94,6 +94,42 @@ export interface Quote {
   createdAt: string;
 }
 
+export type LiveSwapStatus =
+  | "PENDING_DEPOSIT"
+  | "KNOWN_DEPOSIT_TX"
+  | "INCOMPLETE_DEPOSIT"
+  | "PROCESSING"
+  | "SUCCESS"
+  | "REFUNDED"
+  | "FAILED";
+
+export interface LiveSwap {
+  id: string;
+  userId: string;
+  from: AssetSymbol;
+  to: AssetSymbol;
+  amountIn: Minor;
+  amountOut: Minor;
+  minAmountOut?: Minor;
+  rate: string;
+  recipient: string;
+  refundTo: string;
+  depositAddress: string;
+  depositMemo?: string;
+  signature: string;
+  correlationId: string;
+  status: LiveSwapStatus;
+  txHash?: string;
+  timeEstimate?: number;
+  refundedAmount?: Minor;
+  refundReason?: string;
+  transactionId?: string;
+  simulated: false;
+  createdAt: string;
+  updatedAt: string;
+  expiresAt: string;
+}
+
 export type PlanOperationKind =
   | "bank_transfer"
   | "crypto_transfer"

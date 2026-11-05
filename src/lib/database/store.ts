@@ -9,6 +9,7 @@ import type {
   ChatMessage,
   Conversation,
   IdempotencyRecord,
+  LiveSwap,
   Notification,
   Quote,
   Transaction,
@@ -54,6 +55,7 @@ export class DemoStore {
   private beneficiaries = new Map<string, Beneficiary>();
   private bills = new Map<string, Bill>();
   private quotes = new Map<string, Quote>();
+  private liveSwaps = new Map<string, LiveSwap>();
   private plans = new Map<string, TransactionPlan>();
   private approvals = new Map<string, Approval>();
   private conversations = new Map<string, Conversation>();
@@ -73,6 +75,7 @@ export class DemoStore {
     this.beneficiaries.clear();
     this.bills.clear();
     this.quotes.clear();
+    this.liveSwaps.clear();
     this.plans.clear();
     this.approvals.clear();
     this.conversations.clear();
@@ -221,6 +224,31 @@ export class DemoStore {
     return quote ? clone(quote) : undefined;
   }
 
+  addLiveSwap(swap: LiveSwap): LiveSwap {
+    this.liveSwaps.set(swap.id, clone(swap));
+    return clone(swap);
+  }
+
+  getLiveSwap(id: string): LiveSwap | undefined {
+    const swap = this.liveSwaps.get(id);
+    return swap ? clone(swap) : undefined;
+  }
+
+  updateLiveSwap(id: string, update: Partial<LiveSwap>): LiveSwap {
+    const swap = this.liveSwaps.get(id);
+    if (!swap) throw new Error("Live swap not found");
+    Object.assign(swap, update, { updatedAt: new Date().toISOString() });
+    return clone(swap);
+  }
+
+  listLiveSwaps(userId: string, limit = 50): LiveSwap[] {
+    return [...this.liveSwaps.values()]
+      .filter((swap) => swap.userId === userId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, limit)
+      .map(clone);
+  }
+
   addPlan(plan: TransactionPlan): TransactionPlan {
     this.plans.set(plan.id, clone(plan));
     return clone(plan);
@@ -339,10 +367,11 @@ export class DemoStore {
     });
   }
 
-  stats(): { transactions: number; plans: number; auditLogs: number } {
+  stats(): { transactions: number; plans: number; liveSwaps: number; auditLogs: number } {
     return {
       transactions: this.transactions.size,
       plans: this.plans.size,
+      liveSwaps: this.liveSwaps.size,
       auditLogs: this.auditLogs.length,
     };
   }

@@ -82,7 +82,9 @@ export interface OneClickSwapDetails {
 
 export interface OneClickStatusResponse {
   correlationId: string;
-  quoteResponse: OneClickQuoteResponse;
+  quoteResponse: Omit<OneClickQuoteResponse, "correlationId"> & {
+    correlationId?: string;
+  };
   status: OneClickStatus;
   updatedAt: string;
   swapDetails: OneClickSwapDetails;
@@ -113,6 +115,16 @@ export class OneClickApiError extends Error {
   }
 }
 
+const nullableString = z
+  .string()
+  .nullish()
+  .transform((value) => value ?? undefined);
+
+const nullableNumber = z
+  .number()
+  .nullish()
+  .transform((value) => value ?? undefined);
+
 const tokenSchema = z
   .object({
     assetId: z.string().min(1),
@@ -127,21 +139,21 @@ const tokenSchema = z
 
 const quoteSchema = z
   .object({
-    depositAddress: z.string().min(1).optional(),
-    depositMemo: z.string().optional(),
+    depositAddress: nullableString,
+    depositMemo: nullableString,
     amountIn: z.string().min(1),
-    amountInFormatted: z.string().optional(),
-    amountInUsd: z.string().optional(),
-    minAmountIn: z.string().optional(),
+    amountInFormatted: nullableString,
+    amountInUsd: nullableString,
+    minAmountIn: nullableString,
     amountOut: z.string().min(1),
-    amountOutFormatted: z.string().optional(),
-    amountOutUsd: z.string().optional(),
-    minAmountOut: z.string().optional(),
-    deadline: z.string().optional(),
-    timeWhenInactive: z.string().optional(),
-    timeEstimate: z.number().optional(),
-    refundFee: z.string().optional(),
-    withdrawFee: z.string().optional(),
+    amountOutFormatted: nullableString,
+    amountOutUsd: nullableString,
+    minAmountOut: nullableString,
+    deadline: nullableString,
+    timeWhenInactive: nullableString,
+    timeEstimate: nullableNumber,
+    refundFee: nullableString,
+    withdrawFee: nullableString,
   })
   .passthrough();
 
@@ -168,19 +180,23 @@ const swapDetailsSchema = z
     nearTxHashes: z.array(z.string()).default([]),
     originChainTxHashes: z.array(transactionDetailsSchema).default([]),
     destinationChainTxHashes: z.array(transactionDetailsSchema).default([]),
-    amountIn: z.string().optional(),
-    amountOut: z.string().optional(),
-    refundedAmount: z.string().optional(),
-    refundReason: z.string().optional(),
-    depositedAmount: z.string().optional(),
-    withdrawFee: z.string().optional(),
+    amountIn: nullableString,
+    amountOut: nullableString,
+    refundedAmount: nullableString,
+    refundReason: nullableString,
+    depositedAmount: nullableString,
+    withdrawFee: nullableString,
   })
   .passthrough();
+
+const statusQuoteResponseSchema = quoteResponseSchema.extend({
+  correlationId: z.string().min(1).optional(),
+});
 
 const statusResponseSchema = z
   .object({
     correlationId: z.string().min(1),
-    quoteResponse: quoteResponseSchema,
+    quoteResponse: statusQuoteResponseSchema,
     status: z.enum([
       "KNOWN_DEPOSIT_TX",
       "PENDING_DEPOSIT",
