@@ -74,7 +74,20 @@ export const env = {
   get near() {
     return {
       network: process.env.NEAR_NETWORK ?? "testnet",
-      intentsApiUrl: process.env.NEAR_INTENTS_API_URL ?? "",
+      intentsApiUrl: (
+        process.env.NEAR_INTENTS_API_URL ?? "https://1click.chaindefuser.com/v0"
+      ).replace(/\/+$/, ""),
+      intentsApiKey: process.env.NEAR_INTENTS_API_KEY ?? "",
+      intentsAllowUnauthenticated:
+        process.env.NEAR_INTENTS_ALLOW_UNAUTHENTICATED === "true",
+      intentsTimeoutMs: positiveInt(process.env.NEAR_INTENTS_TIMEOUT_MS, 20_000),
+      intentsSlippageBps: positiveInt(process.env.NEAR_INTENTS_SLIPPAGE_BPS, 100),
+      intentsReferral: process.env.NEAR_INTENTS_REFERRAL ?? "",
+      intentsRecipient:
+        process.env.NEAR_INTENTS_RECIPIENT ?? process.env.NEAR_ACCOUNT_ID ?? "",
+      intentsRefundTo:
+        process.env.NEAR_INTENTS_REFUND_TO ?? process.env.NEAR_ACCOUNT_ID ?? "",
+      intentsAssetMap: parseAssetMap(process.env.NEAR_INTENTS_ASSET_MAP),
       rpcUrl: process.env.NEAR_RPC_URL ?? "https://rpc.testnet.near.org",
       accountId: process.env.NEAR_ACCOUNT_ID ?? "",
       outlayerUrl: process.env.OUTLAYER_API_URL ?? "",
@@ -104,4 +117,21 @@ function optionalNumber(value: string | undefined): number | null {
   if (value === undefined || value.trim() === "") return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+}
+
+/**
+ * Parses `SYMBOL=assetId,SYMBOL=assetId` overrides for the 1Click token map.
+ * Asset IDs contain colons, so split only on the first `=`.
+ */
+function parseAssetMap(value: string | undefined): Record<string, string> {
+  if (!value) return {};
+  const entries: Record<string, string> = {};
+  for (const raw of value.split(",")) {
+    const index = raw.indexOf("=");
+    if (index <= 0) continue;
+    const symbol = raw.slice(0, index).trim().toUpperCase();
+    const assetId = raw.slice(index + 1).trim();
+    if (symbol && assetId) entries[symbol] = assetId;
+  }
+  return entries;
 }

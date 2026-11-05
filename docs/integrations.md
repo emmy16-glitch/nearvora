@@ -76,22 +76,41 @@ Implemented:
 
 - Demo wallet balances and reserved `demo_` addresses that are not valid on any chain.
 - Simulated quote engine with expiry and fee/spread fields.
-- NEAR Intents and OutLayer adapter boundaries that fail closed in LIVE mode.
+- 1Click Swap API client (`src/lib/services/intents/oneclick-client.ts`) covering:
+  - `GET /v0/tokens` with a short-lived token cache.
+  - `POST /v0/quote` with `X-API-Key` partner auth, slippage, referral and deadline handling.
+  - `GET /v0/status` with optional `depositMemo`.
+  - `POST /v0/deposit/submit`.
+- Live `OneClickNearIntentsAdapter` with deterministic asset resolution, optional `NEAR_INTENTS_ASSET_MAP` overrides, typed errors and no credential logging.
+- Demo and live adapter selection based on `NEAR_INTENTS_API_KEY` (or explicit `NEAR_INTENTS_ALLOW_UNAUTHENTICATED`) and `NEAR_INTENTS_API_URL`.
+- OutLayer adapter boundary that fails closed in LIVE mode.
 
 Not implemented:
 
+- Wiring live 1Click quotes into the swap UI and plan engine; `POST /api/quotes` still uses the clearly labelled simulated provider.
 - Wallet creation, key management, signing, broadcasting or chain confirmation.
-- NEAR Intents quote/execution API contract and solver configuration.
+- Funding an `ORIGIN_CHAIN` or `INTENTS` deposit from Nearvora custody, and settling/refunding live swaps.
+- Quote signature verification against the 1Click signing key.
 - OutLayer attestation/execution API contract and credentials.
 - Formance ledger postings and reconciliation.
 
 Required before LIVE:
 
-1. Verify official NEAR Intents and OutLayer API contracts and obtain credentials.
-2. Implement key management with a protected signer or MPC/chain-signature setup; never expose keys to the model or browser.
-3. Implement chain/provider balance retrieval from authoritative sources.
-4. Implement independent transaction confirmation and reconciliation.
-5. Obtain all required approvals and legal/compliance sign-off.
+1. Add runtime persistence and a production session store so LIVE API routes are no longer blocked by `src/proxy.ts`.
+2. Decide the custody model and fund either an origin-chain deposit address or an Intents account for each quote.
+3. Implement key management with a protected signer or MPC/chain-signature setup; never expose keys to the model or browser.
+4. Implement independent transaction confirmation, status polling, refund handling and reconciliation.
+5. Verify 1Click quote/status signatures and persist the full signed quote response.
+6. Obtain all required approvals and legal/compliance sign-off.
+
+### 1Click notes
+
+- The API has no testnet. Use small amounts for any manual verification.
+- Authenticated partner JWTs use the partner fee schedule; unauthenticated requests add 0.25% and are disabled unless `NEAR_INTENTS_ALLOW_UNAUTHENTICATED=true`.
+- Amounts are integer strings in the asset's smallest unit; never send decimal strings.
+- Default asset selection prefers NEAR for stablecoins, BTC on Bitcoin, and so on. Use `NEAR_INTENTS_ASSET_MAP` when a deployment needs an exact assetId.
+- Quotes default to `INTENTS` deposit/refund types using the configured NEAR account. Supply an explicit `refundTo` (and optionally `depositType`/`refundType`) to use the standard `ORIGIN_CHAIN` flow.
+- Naira is not settled by NEAR Intents; the adapter rejects NGN rather than inventing a route.
 
 ## Database and authentication
 

@@ -15,7 +15,7 @@ This repository is a complete, runnable **demo implementation**. Balances, quote
 - Server-side **Groq** or **NEAR AI Cloud** integration through an OpenAI-compatible client, with model discovery, timeouts, bounded retries, usage/cost tracking, a health check and a labelled deterministic fallback planner for demo mode.
 - Structured intent extraction plus text-only answers to general account questions. The model never supplies balances or executes operations; plans are rebuilt from backend data.
 - Controlled backend AI helpers for balances, saved beneficiaries, bills and quotes (not exposed as unrestricted model tools).
-- Simulated quote provider, outbound policy adapter (OutLayer boundary), NEAR Intents boundary, payment-provider boundary and demo accounting ledger.
+- Simulated quote provider, outbound policy adapter (OutLayer boundary), NEAR Intents boundary with a typed 1Click quote/status client, payment-provider boundary and demo accounting ledger.
 - Explicit DEMO/LIVE runtime modes. LIVE mode fails closed until persistent storage and verified provider adapters exist.
 - Prisma/PostgreSQL schema, initial SQL migration and seed script.
 - Unit and flow tests for money arithmetic, plan creation/approval/execution, idempotency, risk gates and AI fallback planning.
@@ -59,7 +59,12 @@ All values are optional for the demo. See `.env.example`.
 | `AI_DAILY_REQUEST_LIMIT`, `AI_DAILY_TOKEN_LIMIT` | Per-user daily AI budget guardrails. |
 | `GROQ_*_COST_PER_MILLION`, `NEAR_AI_*_COST_PER_MILLION` | Optional verified pricing for cost estimates. |
 | `NEAR_NETWORK`, `NEAR_RPC_URL`, `NEAR_ACCOUNT_ID` | NEAR context for the Intents adapter. |
-| `NEAR_INTENTS_API_URL` | Intents quote/settlement endpoint when implemented. |
+| `NEAR_INTENTS_API_URL` | 1Click API base URL. Defaults to `https://1click.chaindefuser.com/v0`. |
+| `NEAR_INTENTS_API_KEY` | Partner JWT sent as `X-API-Key`. Required for the authenticated fee schedule. |
+| `NEAR_INTENTS_ALLOW_UNAUTHENTICATED` | Set `true` only if you accept 1Click's extra unauthenticated fee. |
+| `NEAR_INTENTS_TIMEOUT_MS`, `NEAR_INTENTS_SLIPPAGE_BPS` | 1Click request timeout and default slippage in basis points. |
+| `NEAR_INTENTS_RECIPIENT`, `NEAR_INTENTS_REFUND_TO`, `NEAR_INTENTS_REFERRAL` | Default 1Click recipient/refund account and distribution identifier. |
+| `NEAR_INTENTS_ASSET_MAP` | Optional `SYMBOL=assetId` overrides, e.g. `USDT=nep141:...`. |
 | `OUTLAYER_API_URL`, `OUTLAYER_API_KEY` | OutLayer policy/execution boundary. |
 | `PAYMENT_PROVIDER`, `PAYMENT_WEBHOOK_SECRET` | Naira provider target and webhook verification. |
 | `FORMANCE_LEDGER_URL`, `FORMANCE_LEDGER_TOKEN` | Formance ledger boundary. |
@@ -144,7 +149,8 @@ Key boundaries:
 - `src/lib/ai/` — OpenAI-compatible Groq/NEAR AI provider, model configuration, health check, usage budget and safe errors.
 - `src/lib/services/ai/` — model intent planner, text answers, deterministic fallback, backend helpers and chat service.
 - `src/lib/services/outlayer/index.ts` — policy/execution guard boundary.
-- `src/lib/services/intents/index.ts` — NEAR Intents boundary.
+- `src/lib/services/intents/index.ts` — NEAR Intents boundary with a 1Click quote/status adapter.
+- `src/lib/services/intents/oneclick-client.ts` — typed 1Click Swap API client (tokens, quote, status, deposit submit).
 - `src/lib/services/payments/index.ts` — payment-provider boundary.
 - `src/lib/services/accounting/index.ts` — demo ledger/Formance boundary.
 - `src/lib/database/store.ts` — in-memory demo repository with a LIVE-mode fail-closed guard.

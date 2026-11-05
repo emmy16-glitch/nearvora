@@ -29,7 +29,9 @@ export function systemStatus() {
       intentsConfigured: intents.isConfigured(),
       outlayerMode: outlayer.mode,
       liveExecution: false,
-      note: "NEAR Intents and OutLayer live execution are not configured in this build.",
+      note: intents.isConfigured()
+        ? "1Click quoting and status tracking are configured. Live settlement and custody remain disabled in this build."
+        : "NEAR Intents and OutLayer live execution are not configured in this build.",
     },
     payments: {
       provider: payments.name,
