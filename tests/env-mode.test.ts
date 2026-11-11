@@ -41,4 +41,17 @@ describe("demo mode defaults", () => {
     expect(env.demoMode).toBe(false);
     expect(env.mode).toBe("live");
   });
+
+  it("blocks self-custody transaction APIs in production until explicitly reviewed", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("DEMO_MODE", "false");
+    vi.resetModules();
+    const { NextRequest } = await import("next/server");
+    const { proxy } = await import("@/proxy");
+    const response = proxy(new NextRequest("https://nearvora.invalid/api/intents/swaps"));
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "LIVE_RUNTIME_UNAVAILABLE" },
+    });
+  });
 });

@@ -7,9 +7,9 @@ This document records what is genuinely implemented, what is simulated, and what
 | Mode | Behaviour |
 | --- | --- |
 | `DEMO_MODE=true` (explicit opt-in) | In-memory demo data, simulated Naira providers and demo plans. Use for local development only; never set this in a real-money production deployment. |
-| `DEMO_MODE=false`, or unset in production | Fails closed rather than serving seeded balances. `src/proxy.ts` blocks normal API routes but allows health checks and `/api/intents`; live 1Click routes still require a valid session and their current in-memory swap repository is not durable. Production auth and durable persistence are still required. |
+| `DEMO_MODE=false`, or unset in production | Fails closed rather than serving seeded balances. `src/proxy.ts` allows health checks only and blocks all transaction APIs, including live 1Click swaps. Production auth, durable persistence, regulatory approval and provider controls are still required before any transaction API is enabled. |
 
-Custodial LIVE execution is not implemented. Users can execute live 1Click swaps by depositing from their own wallet; Nearvora never holds those funds.
+Custodial LIVE execution is not implemented. The 1Click swap integration is self-custody (users authorize from their own wallet), but it is blocked by default in production until the production release gates are reviewed and explicitly changed.
 
 ## AI provider (Groq / NEAR AI Cloud)
 
