@@ -98,6 +98,7 @@ export const env = {
     return {
       provider: process.env.PAYMENT_PROVIDER ?? "demo",
       webhookSecret: process.env.PAYMENT_WEBHOOK_SECRET ?? "",
+      flutterwaveTestSecretKey: process.env.FLUTTERWAVE_TEST_SECRET_KEY ?? "",
     };
   },
   get formance() {

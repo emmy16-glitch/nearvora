@@ -36,7 +36,7 @@ export function systemStatus() {
     payments: {
       provider: payments.name,
       mode: payments.mode,
-      note: "All Naira settlements are simulated unless approved live credentials are configured and live mode is enabled.",
+      note: "App deposit, transfer and bill screens remain simulated. A separate Flutterwave test-only API is available when configured; it does not change wallet balances.",
     },
     accounting: {
       formanceConfigured: Boolean(env.formance.url && env.formance.token),

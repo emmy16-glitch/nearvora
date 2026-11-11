@@ -52,23 +52,30 @@ Implemented:
 
 - Provider-agnostic payment adapter interface.
 - Demo provider returning clearly simulated virtual accounts and intents.
-- Generic webhook signature verification scaffold.
+- Isolated Flutterwave v3 test-mode client (`src/lib/services/payments/flutterwave-client.ts`) for NG bank account resolution, one-time bank-transfer charges, NGN payouts, bill payment and transaction verification.
+- Current-session and same-origin-protected sandbox endpoints at `/api/payments/flutterwave`. The route requires a Flutterwave test secret for provider operations and rejects live keys. Transaction-creating calls are not automatically retried after timeouts.
+- Deposit, withdrawal and bill screens are wired to the sandbox flows. Bank payout requires server-side bank-account resolution; bill payment rechecks the available item, fixed price and (where resolvable) customer validation.
+- Mocked provider-contract tests; no Flutterwave secret is needed to run the test suite.
 - LIVE mode never returns the demo provider.
 
 Not implemented:
 
-- Real provider credentials and official API contracts.
-- Provider-specific webhook signature schemes, timestamp/replay protection and event deduplication.
-- Provider verification of deposits, payouts, reversals and bank account ownership.
+- Durable storage/reconciliation and durable idempotency for provider operations; provider responses do not credit or change Nearvora balances or create app transactions.
+- Flutterwave webhook event verification/processing and event deduplication.
+- Live provider credentials, production eligibility and IP allowlisting.
+- Production verification of deposits, payouts and reversals, plus provider reconciliation.
+- Production authentication; the current route uses the app's demo session and must not be mistaken for customer-grade authorization.
 - Business approval, settlement accounts, reconciliation and regulatory arrangements.
 
-Required before LIVE:
+Required before real-money LIVE:
 
-1. Choose one approved provider and obtain production credentials.
-2. Implement the adapter against the provider's official API and sandbox.
-3. Implement and test provider-specific webhook signatures, idempotency and event storage.
-4. Reconcile provider settlements against the internal ledger.
-5. Complete KYB/KYC, licensing and customer-funds arrangements.
+1. Add durable PostgreSQL-backed records for provider operations, an accounting ledger, idempotency keys and webhook events.
+2. Replace the demo session with production authentication and user authorization.
+3. Reconcile provider operations into reviewed ledger flows; do not treat current demo balances as withdrawable funds.
+4. Implement and test Flutterwave's webhook secret-hash verification, provider transaction verification and idempotent event handling.
+5. Obtain Flutterwave production eligibility, KYC/KYB approval, account funding and IP allowlisting; complete applicable regulatory and customer-funds arrangements.
+
+For the isolated test experience, configure `FLUTTERWAVE_TEST_SECRET_KEY` in the server environment. It must be a Flutterwave test key; a live key is rejected. The endpoint covers provider sandbox calls only and does not persist results, create Nearvora transactions, or change wallet balances. See `docs/flutterwave-sandbox.md` for setup and provider references.
 
 ## Crypto / NEAR Intents / OutLayer
 

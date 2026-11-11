@@ -2,297 +2,159 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { ArrowLeft, ArrowUpRight, Check, Landmark, UserRound } from "lucide-react";
-import { useApi } from "@/lib/hooks/use-api";
-import { postJson, issueMessage } from "@/lib/client/api";
+import { ArrowLeft, ArrowUpRight, Check, Landmark } from "lucide-react";
+import { apiFetch, postJson, issueMessage } from "@/lib/client/api";
 import { useToast } from "@/components/ui/toast";
-import type { Beneficiary, PortfolioSnapshot, TransactionPlan } from "@/lib/types/domain";
 import { formatNgn } from "@/lib/money/format";
 import { toMinor } from "@/lib/money/money";
-import { DEMO_BANKS, DEMO_BANK_FEE_KOBO } from "@/lib/config/banks";
 import { PageHeader, Card } from "@/components/ui/card";
-import { PageSkeleton, ErrorState } from "@/components/ui/states";
-import { DemoNotice } from "@/components/ui/demo-notice";
+import { ErrorState } from "@/components/ui/states";
 import { Badge } from "@/components/ui/badge";
 import { Input, Select } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { PlanReviewModal } from "@/components/transactions/plan-review";
 
-type Mode = "saved" | "new";
+type Bank = { code: string; name: string };
+type Resolution = { account_number: string; account_name: string };
+type PayoutResult = { id?: string | number; status?: string; reference?: string; [key: string]: unknown };
 
 export default function WithdrawPage() {
   const { toast } = useToast();
-  const portfolio = useApi<PortfolioSnapshot>("/api/wallets");
-  const beneficiaries = useApi<Beneficiary[]>("/api/beneficiaries");
-
-  const [mode, setMode] = React.useState<Mode>("saved");
-  const [selectedId, setSelectedId] = React.useState("");
-  const [amount, setAmount] = React.useState("");
-  const [accountName, setAccountName] = React.useState("");
-  const [bankName, setBankName] = React.useState<string>(DEMO_BANKS[6]);
+  const [banks, setBanks] = React.useState<Bank[]>([]);
+  const [bankCode, setBankCode] = React.useState("");
   const [accountNumber, setAccountNumber] = React.useState("");
-  const [errors, setErrors] = React.useState<Record<string, string>>({});
+  const [amount, setAmount] = React.useState("");
+  const [banksLoading, setBanksLoading] = React.useState(true);
+  const [resolving, setResolving] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
-  const [plan, setPlan] = React.useState<TransactionPlan | null>(null);
-  const [reviewOpen, setReviewOpen] = React.useState(false);
-
-  const bankBeneficiaries = (beneficiaries.data ?? []).filter(
-    (beneficiary) => beneficiary.type === "bank",
-  );
-  const selected = bankBeneficiaries.find((item) => item.id === selectedId);
-  const available = portfolio.data?.nairaAvailable ?? "0";
+  const [setupError, setSetupError] = React.useState("");
+  const [resolved, setResolved] = React.useState<Resolution | null>(null);
+  const [result, setResult] = React.useState<PayoutResult | null>(null);
+  const bank = banks.find((item) => item.code === bankCode);
 
   React.useEffect(() => {
-    if (!selectedId && bankBeneficiaries[0]) setSelectedId(bankBeneficiaries[0].id);
-  }, [bankBeneficiaries, selectedId]);
+    let active = true;
+    apiFetch<Bank[]>("/api/payments/flutterwave?resource=banks")
+      .then((list) => {
+        if (!active) return;
+        setBanks(list);
+        setBankCode(list[0]?.code ?? "");
+      })
+      .catch((error) => { if (active) setSetupError(issueMessage(error)); })
+      .finally(() => { if (active) setBanksLoading(false); });
+    return () => { active = false; };
+  }, []);
 
-  const validate = () => {
-    const next: Record<string, string> = {};
-    if (mode === "saved" && !selectedId) next.recipient = "Choose a withdrawal account";
-    if (mode === "new") {
-      if (accountName.trim().length < 2) next.accountName = "Enter the account name";
-      if (!/^\d{10}$/.test(accountNumber.trim())) next.accountNumber = "Enter a 10-digit account number";
+  const resolveAccount = async () => {
+    setSetupError("");
+    setResolved(null);
+    setResult(null);
+    if (!/^\d{10}$/.test(accountNumber) || !bankCode) {
+      setSetupError("Choose a bank and enter a 10-digit account number.");
+      return;
     }
-    if (!amount.trim()) next.amount = "Enter an amount";
-    else if (!/^\d+(\.\d{1,2})?$/.test(amount.trim())) next.amount = "Enter a valid Naira amount";
-    else {
-      const amountMinor = BigInt(toMinor(amount.trim(), 2));
-      if (amountMinor <= 0n) next.amount = "Amount must be greater than zero";
-      else if (amountMinor + BigInt(DEMO_BANK_FEE_KOBO) > BigInt(available)) {
-        next.amount = `Insufficient Naira. Available ${formatNgn(available)}.`;
+    setResolving(true);
+    try {
+      const resolution = await postJson<Resolution>("/api/payments/flutterwave", {
+        operation: "resolve_account", accountNumber, bankCode,
+      });
+      if (resolution.account_number !== accountNumber || !resolution.account_name) {
+        throw new Error("Flutterwave did not return a matching, named account.");
       }
+      setResolved(resolution);
+      toast({ title: "Account verified", description: resolution.account_name });
+    } catch (error) {
+      const message = issueMessage(error);
+      setSetupError(message);
+      toast({ title: "Account lookup failed", description: message, variant: "error" });
+    } finally {
+      setResolving(false);
     }
-    setErrors(next);
-    return Object.keys(next).length === 0;
   };
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!validate()) return;
+    setSetupError("");
+    setResult(null);
+    if (!resolved) {
+      setSetupError("Resolve and verify the account before requesting a test payout.");
+      return;
+    }
+    if (!/^\d+(\.\d{1,2})?$/.test(amount.trim()) || BigInt(toMinor(amount.trim(), 2)) <= 0n) {
+      setSetupError("Enter a valid amount greater than zero.");
+      return;
+    }
+    const amountMinor = toMinor(amount.trim(), 2);
+    const confirmed = window.confirm(
+      `TEST/SANDBOX payout confirmation\n\nRecipient: ${resolved.account_name}\nAccount: ${resolved.account_number}\nBank: ${bank?.name ?? bankCode}\nAmount: ${formatNgn(amountMinor)}\n\nSend this test-mode payout request? No real funds will be sent.`,
+    );
+    if (!confirmed) return;
     setSubmitting(true);
     try {
-      const created = await postJson<TransactionPlan>("/api/plans", {
-        title: "Naira withdrawal",
-        operations: [
-          {
-            kind: "cash_withdrawal",
-            amount: amount.trim(),
-            ...(mode === "saved"
-              ? { beneficiaryId: selectedId }
-              : {
-                  accountName: accountName.trim(),
-                  bankName,
-                  accountNumber: accountNumber.trim(),
-                }),
-          },
-        ],
-        idempotencyKey: crypto.randomUUID(),
+      const payout = await postJson<PayoutResult>("/api/payments/flutterwave", {
+        operation: "payout",
+        amountMinor,
+        accountNumber: resolved.account_number,
+        bankCode,
+        reference: `wd_${crypto.randomUUID().replace(/-/g, "").slice(0, 28)}`,
+        narration: "TEST/SANDBOX withdrawal",
       });
-      setPlan(created);
-      setReviewOpen(true);
-    } catch (caught) {
-      toast({ title: "Could not prepare withdrawal", description: issueMessage(caught), variant: "error" });
+      setResult(payout);
+      toast({ title: "Sandbox payout response received", description: "Review the provider status below." });
+    } catch (error) {
+      const message = issueMessage(error);
+      setSetupError(message);
+      toast({ title: "Sandbox payout failed", description: message, variant: "error" });
     } finally {
       setSubmitting(false);
     }
   };
 
-  if (portfolio.loading && !portfolio.data) return <PageSkeleton />;
-  if (portfolio.error && !portfolio.data) {
-    return (
-      <ErrorState
-        title="Wallet could not be loaded"
-        message={portfolio.error.message}
-        onRetry={() => portfolio.refetch()}
-      />
-    );
-  }
-
   const amountMinor = /^\d+(\.\d{1,2})?$/.test(amount.trim()) ? toMinor(amount.trim(), 2) : "0";
-  const total = (BigInt(amountMinor) + BigInt(DEMO_BANK_FEE_KOBO)).toString();
-  const remaining = (BigInt(available) - BigInt(total)).toString();
 
   return (
     <div className="space-y-6">
-      <Link
-        href="/dashboard"
-        className="inline-flex items-center gap-1.5 text-[11px] font-medium text-muted transition-colors hover:text-fg"
-      >
+      <Link href="/dashboard" className="inline-flex items-center gap-1.5 text-[11px] font-medium text-muted transition-colors hover:text-fg">
         <ArrowLeft className="size-3.5" /> Home
       </Link>
-
       <PageHeader
-        eyebrow="Withdraw"
-        title="Withdraw Naira"
-        description="Send Naira to a saved or new bank account. Withdrawals are simulated and remain pending until demo settlement."
-        action={<Badge variant="warning">Demo withdrawal</Badge>}
+        eyebrow="Withdraw · TEST/SANDBOX"
+        title="Test bank payout"
+        description="Submit a Flutterwave sandbox payout only. This does not use or update Nearvora wallet balances."
+        action={<Badge variant="warning">TEST / SANDBOX ONLY</Badge>}
       />
-
       <div className="grid gap-5 lg:grid-cols-[1.15fr_0.85fr]">
         <Card className="p-5 sm:p-6">
-          <div className="mb-5 grid grid-cols-2 gap-1 rounded-xl border border-line bg-surface-2 p-1">
-            {(["saved", "new"] as Mode[]).map((value) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => setMode(value)}
-                className={`h-8 rounded-lg text-xs font-medium transition-colors ${
-                  mode === value ? "bg-surface-3 text-fg" : "text-muted hover:text-fg"
-                }`}
-              >
-                {value === "saved" ? "Saved account" : "New account"}
-              </button>
-            ))}
-          </div>
-
           <form onSubmit={submit} className="space-y-4" noValidate>
-            {mode === "saved" ? (
-              <div>
-                <p className="mb-2 text-xs font-medium text-muted">Withdrawal account</p>
-                <div className="space-y-2">
-                  {bankBeneficiaries.map((beneficiary) => (
-                    <button
-                      key={beneficiary.id}
-                      type="button"
-                      onClick={() => setSelectedId(beneficiary.id)}
-                      className={`flex w-full items-center gap-3 rounded-xl border px-3.5 py-3 text-left transition-colors ${
-                        selectedId === beneficiary.id
-                          ? "border-accent/40 bg-accent/[0.04]"
-                          : "border-line bg-surface hover:bg-surface-2"
-                      }`}
-                    >
-                      <span className="grid size-8 place-items-center rounded-full bg-surface-2 text-muted">
-                        <UserRound className="size-3.5" />
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-xs font-medium text-fg">{beneficiary.name}</span>
-                        <span className="block text-[10.5px] text-muted-2">
-                          {beneficiary.bankName} ••{beneficiary.accountNumber?.slice(-4)}
-                        </span>
-                      </span>
-                      {selectedId === beneficiary.id ? <Check className="size-4 text-accent" /> : null}
-                    </button>
-                  ))}
-                </div>
-                {errors.recipient ? (
-                  <p className="mt-1.5 text-xs text-danger">{errors.recipient}</p>
-                ) : null}
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <Input
-                  label="Account name"
-                  value={accountName}
-                  onChange={(event) => setAccountName(event.target.value)}
-                  error={errors.accountName}
-                />
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <Select label="Bank" value={bankName} onChange={(event) => setBankName(event.target.value)}>
-                    {DEMO_BANKS.map((bank) => (
-                      <option key={bank} value={bank}>
-                        {bank}
-                      </option>
-                    ))}
-                  </Select>
-                  <Input
-                    label="Account number"
-                    inputMode="numeric"
-                    maxLength={10}
-                    value={accountNumber}
-                    onChange={(event) =>
-                      setAccountNumber(event.target.value.replace(/\D/g, "").slice(0, 10))
-                    }
-                    error={errors.accountNumber}
-                  />
-                </div>
-              </div>
-            )}
-
-            <Input
-              label="Amount (NGN)"
-              inputMode="decimal"
-              placeholder="0.00"
-              prefix="₦"
-              value={amount}
-              onChange={(event) => setAmount(event.target.value)}
-              error={errors.amount}
-              hint={`Available ${formatNgn(available)}`}
-            />
-
-            <div className="rounded-xl border border-line bg-surface p-3.5">
-              <Line label="Withdrawal amount" value={formatNgn(amountMinor)} />
-              <Line label="Withdrawal fee" value={formatNgn(DEMO_BANK_FEE_KOBO)} />
-              <div className="my-2 border-t border-line" />
-              <Line label="Total debit" value={formatNgn(total)} strong />
-              <Line
-                label="Estimated Naira remaining"
-                value={formatNgn(remaining.startsWith("-") ? "0" : remaining)}
-              />
-            </div>
-
+            <Select label="Bank · TEST/SANDBOX" value={bankCode} onChange={(event) => { setBankCode(event.target.value); setResolved(null); setResult(null); }} disabled={banksLoading || banks.length === 0}>
+              {banksLoading ? <option value="">Loading banks…</option> : banks.map((item) => <option key={item.code} value={item.code}>{item.name}</option>)}
+            </Select>
+            <Input label="Account number" inputMode="numeric" maxLength={10} value={accountNumber} onChange={(event) => { setAccountNumber(event.target.value.replace(/\D/g, "").slice(0, 10)); setResolved(null); setResult(null); }} />
             <div className="flex justify-end">
-              <Button type="submit" loading={submitting}>
-                <ArrowUpRight className="size-4" /> Review withdrawal
+              <Button type="button" loading={resolving} onClick={() => void resolveAccount()} disabled={banksLoading || !banks.length || accountNumber.length !== 10}>
+                <Check className="size-4" /> Resolve account name
               </Button>
             </div>
+            {resolved && <div className="rounded-xl border border-accent/30 bg-accent/[0.04] p-3.5 text-xs"><p className="font-semibold text-fg">Verified recipient: {resolved.account_name}</p><p className="mt-1 text-muted">{resolved.account_number} · {bank?.name}</p></div>}
+            <Input label="Amount (NGN) · TEST/SANDBOX" inputMode="decimal" placeholder="0.00" prefix="₦" value={amount} onChange={(event) => setAmount(event.target.value)} />
+            <div className="rounded-xl border border-line bg-surface p-3.5"><Line label="Test payout amount" value={formatNgn(amountMinor)} /><p className="mt-2 text-[10px] leading-4 text-muted-2">Sandbox request only. Seeded demo balances are not payout funding; this action does not claim or apply a wallet balance change.</p></div>
+            {setupError && <ErrorState title="Sandbox setup or request error" message={setupError} />}
+            <div className="flex justify-end"><Button type="submit" loading={submitting} disabled={!resolved || !amount.trim()}><ArrowUpRight className="size-4" /> Confirm TEST payout</Button></div>
           </form>
         </Card>
-
         <div className="space-y-4">
           <Card className="p-5">
-            <div className="flex items-center gap-2">
-              <Landmark className="size-4 text-muted" />
-              <h3 className="text-sm font-semibold text-fg">Withdrawal details</h3>
-            </div>
-            <div className="mt-4 space-y-3">
-              <Line
-                label="Recipient"
-                value={mode === "saved" ? selected?.name ?? "—" : accountName || "New account"}
-              />
-              <Line label="Bank" value={mode === "saved" ? selected?.bankName ?? "—" : bankName} />
-              <Line
-                label="Account"
-                value={
-                  mode === "saved"
-                    ? selected?.accountNumber
-                      ? `••••${selected.accountNumber.slice(-4)}`
-                      : "—"
-                    : accountNumber
-                      ? `••••${accountNumber.slice(-4)}`
-                      : "—"
-                }
-              />
-              <Line label="Processing" value="Simulated · pending settlement" />
-            </div>
-            <p className="mt-4 text-[10px] leading-4 text-muted-2">
-              Approving a withdrawal creates a pending demo transaction. It does not contact a bank.
-            </p>
+            <div className="flex items-center gap-2"><Landmark className="size-4 text-muted" /><h3 className="text-sm font-semibold text-fg">Sandbox payout</h3></div>
+            <div className="mt-4 space-y-3"><Line label="Mode" value="TEST" /><Line label="Recipient" value={resolved?.account_name ?? "Not verified"} /><Line label="Bank" value={bank?.name ?? "—"} /><Line label="Account" value={resolved?.account_number ?? "—"} /><Line label="Amount" value={formatNgn(amountMinor)} /></div>
+            <p className="mt-4 text-[10px] leading-4 text-muted-2">The server resolves the account again before sending the test request. You must confirm the recipient immediately before submission.</p>
           </Card>
-          <DemoNotice>No real bank settlement occurs in this build.</DemoNotice>
+          {banksLoading && <p className="text-xs text-muted">Loading Flutterwave sandbox bank list…</p>}
+          {result && <Card className="p-5"><h3 className="text-sm font-semibold text-fg">Provider result · TEST/SANDBOX</h3><pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap break-all text-[10px] text-muted">{JSON.stringify(result, null, 2)}</pre><p className="mt-3 text-[10px] text-muted-2">Provider response only; no wallet balance or activity entry was changed by this screen.</p></Card>}
         </div>
       </div>
-
-      <PlanReviewModal
-        plan={plan}
-        open={reviewOpen}
-        onClose={() => setReviewOpen(false)}
-        onExecuted={(executed) => {
-          setPlan(executed);
-          setAmount("");
-          void portfolio.refetch({ quiet: true });
-        }}
-      />
     </div>
   );
 }
 
-function Line({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) {
-  return (
-    <div className="flex items-center justify-between gap-3 py-0.5">
-      <span className="text-[11px] text-muted">{label}</span>
-      <span className={`font-mono text-[11px] ${strong ? "font-semibold text-fg" : "text-fg"}`}>
-        {value}
-      </span>
-    </div>
-  );
+function Line({ label, value }: { label: string; value: string }) {
+  return <div className="flex items-center justify-between gap-3 py-0.5"><span className="text-[11px] text-muted">{label}</span><span className="font-mono text-[11px] text-fg">{value}</span></div>;
 }
