@@ -1,10 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { env } from "@/lib/config/env";
 
 const LIVE_BLOCKED_MESSAGE =
   "LIVE mode is not available in this build. Nearvora refuses to serve in-memory demo balances, quotes or transactions as live data. Set DEMO_MODE=true, or implement and verify persistent storage and provider adapters first.";
 
 export function proxy(request: NextRequest) {
-  if (process.env.DEMO_MODE !== "false") return NextResponse.next();
+  if (env.demoMode) return NextResponse.next();
 
   const { pathname } = request.nextUrl;
   if (pathname.startsWith("/api/health")) {

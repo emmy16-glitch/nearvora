@@ -6,8 +6,8 @@ This document records what is genuinely implemented, what is simulated, and what
 
 | Mode | Behaviour |
 | --- | --- |
-| `DEMO_MODE=true` (default) | In-memory demo data, simulated Naira providers and demo plans. Live self-custody 1Click swaps are available at `/swap/live`. |
-| `DEMO_MODE=false` | The demo ledger and simulated provider paths fail closed. `src/proxy.ts` blocks normal API routes but allows `/api/intents` so live 1Click swaps can run with their own in-memory repository. Production auth and durable persistence are still required. |
+| `DEMO_MODE=true` (explicit opt-in) | In-memory demo data, simulated Naira providers and demo plans. Use for local development only; never set this in a real-money production deployment. |
+| `DEMO_MODE=false`, or unset in production | Fails closed rather than serving seeded balances. `src/proxy.ts` blocks normal API routes but allows health checks and `/api/intents`; live 1Click routes still require a valid session and their current in-memory swap repository is not durable. Production auth and durable persistence are still required. |
 
 Custodial LIVE execution is not implemented. Users can execute live 1Click swaps by depositing from their own wallet; Nearvora never holds those funds.
 

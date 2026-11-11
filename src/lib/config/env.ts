@@ -9,7 +9,9 @@ export type AiProviderId = "near-ai-cloud" | "groq";
  */
 export const env = {
   get demoMode() {
-    return process.env.DEMO_MODE !== "false";
+    if (process.env.DEMO_MODE === "true") return true;
+    if (process.env.DEMO_MODE === "false") return false;
+    return !isProduction;
   },
   get mode(): "demo" | "live" {
     return this.demoMode ? "demo" : "live";
